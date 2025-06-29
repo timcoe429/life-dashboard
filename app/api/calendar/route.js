@@ -16,8 +16,32 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 export async function POST(request) {
+  console.log('Calendar POST route called');
+  
+  // Check environment variables
+  console.log('Environment check:');
+  console.log('- OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'Set' : 'Missing');
+  console.log('- GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'Set' : 'Missing');
+  console.log('- GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Set' : 'Missing');
+  
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json({
+      success: false,
+      error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to environment variables.',
+    }, { status: 500 });
+  }
+  
   try {
     const { input, accessToken, action = 'add' } = await request.json();
+    
+    console.log('Request data:', { input, action, accessToken: accessToken ? 'Present' : 'Missing' });
+    
+    if (!input || !accessToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'Missing required fields: input and accessToken are required',
+      }, { status: 400 });
+    }
     
     // Set the credentials
     oauth2Client.setCredentials({
@@ -27,52 +51,74 @@ export async function POST(request) {
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
     // AI Processing - Analyze the natural language input
-    const aiResponse = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: `You are a smart calendar assistant. Analyze the user's input and extract:
-          1. Event title
-          2. Date/time (if not specified, suggest optimal times)
-          3. Duration (default 1 hour if not specified)  
-          4. Event type (meeting, task, personal, etc.)
-          5. Priority level (high, medium, low)
-          6. Description/notes
-          
-          Respond in JSON format:
+    console.log('Sending request to OpenAI...');
+    let aiResponse;
+    try {
+      aiResponse = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
           {
-            "title": "Event title",
-            "dateTime": "2024-01-15T14:00:00Z",
-            "duration": 60,
-            "type": "meeting|task|personal|workout|etc",
-            "priority": "high|medium|low",
-            "description": "Additional details",
-            "action": "add|delete|modify",
-            "tags": ["tag1", "tag2"]
+            role: "system",
+            content: `You are a smart calendar assistant. Analyze the user's input and extract:
+            1. Event title
+            2. Date/time (if not specified, suggest optimal times)
+            3. Duration (default 1 hour if not specified)  
+            4. Event type (meeting, task, personal, etc.)
+            5. Priority level (high, medium, low)
+            6. Description/notes
+            
+            Respond in JSON format:
+            {
+              "title": "Event title",
+              "dateTime": "2024-01-15T14:00:00Z",
+              "duration": 60,
+              "type": "meeting|task|personal|workout|etc",
+              "priority": "high|medium|low",
+              "description": "Additional details",
+              "action": "add|delete|modify",
+              "tags": ["tag1", "tag2"]
+            }
+            
+            For time suggestions, prefer:
+            - Morning (9-11am) for important meetings
+            - Afternoon (2-4pm) for deep work
+            - Evening (6-8pm) for personal tasks
+            
+            Current time context: ${new Date().toISOString()}`
+          },
+          {
+            role: "user",
+            content: input
           }
-          
-          For time suggestions, prefer:
-          - Morning (9-11am) for important meetings
-          - Afternoon (2-4pm) for deep work
-          - Evening (6-8pm) for personal tasks
-          
-          Current time context: ${new Date().toISOString()}`
-        },
-        {
-          role: "user",
-          content: input
-        }
-      ],
-      temperature: 0.3,
-    });
+        ],
+        temperature: 0.3,
+      });
+    } catch (openaiError) {
+      console.error('OpenAI API Error:', openaiError);
+      return NextResponse.json({
+        success: false,
+        error: 'OpenAI API error: ' + openaiError.message,
+      }, { status: 500 });
+    }
 
-    const aiData = JSON.parse(aiResponse.choices[0].message.content);
+    console.log('OpenAI response received');
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (parseError) {
+      console.error('AI Response parsing error. Raw response:', aiResponse?.choices?.[0]?.message?.content);
+      return NextResponse.json({
+        success: false,
+        error: 'AI response parsing failed. The AI returned invalid JSON.',
+      }, { status: 500 });
+    }
+    console.log('AI analysis result:', aiData);
     
     // Get existing events to find optimal time slots
     const now = new Date();
     const endTime = addDays(now, 7); // Look ahead 7 days
     
+    console.log('Fetching existing calendar events...');
     const existingEvents = await calendar.events.list({
       calendarId: 'primary',
       timeMin: now.toISOString(),
@@ -80,6 +126,8 @@ export async function POST(request) {
       singleEvents: true,
       orderBy: 'startTime',
     });
+    
+    console.log('Found', existingEvents.data.items.length, 'existing events');
 
     // Smart scheduling - find optimal time slot
     const optimalTime = findOptimalTimeSlot(
@@ -89,12 +137,14 @@ export async function POST(request) {
       aiData.type,
       aiData.priority
     );
+    
+    console.log('Optimal time calculated:', optimalTime);
 
     if (aiData.action === 'add') {
       // Create the event
       const event = {
         summary: aiData.title,
-        description: `${aiData.description}\n\nTags: ${aiData.tags.join(', ')}\nPriority: ${aiData.priority}\nType: ${aiData.type}`,
+        description: `${aiData.description || ''}\n\nTags: ${aiData.tags ? aiData.tags.join(', ') : ''}\nPriority: ${aiData.priority}\nType: ${aiData.type}`,
         start: {
           dateTime: optimalTime.toISOString(),
           timeZone: 'America/New_York', // Adjust to your timezone
@@ -113,10 +163,14 @@ export async function POST(request) {
         },
       };
 
+      console.log('Creating calendar event:', event);
+      
       const createdEvent = await calendar.events.insert({
         calendarId: 'primary',
         resource: event,
       });
+      
+      console.log('Event created successfully:', createdEvent.data.id);
 
       return NextResponse.json({
         success: true,
@@ -128,12 +182,33 @@ export async function POST(request) {
     }
 
     // Handle other actions (delete, modify) here...
+    return NextResponse.json({
+      success: false,
+      error: 'Action not supported yet: ' + aiData.action,
+    }, { status: 400 });
     
   } catch (error) {
     console.error('Calendar API Error:', error);
+    
+    // Better error categorization
+    if (error.code === 401) {
+      return NextResponse.json({
+        success: false,
+        error: 'Google Calendar authentication failed. Please reconnect your account.',
+      }, { status: 401 });
+    }
+    
+    if (error.code === 403) {
+      return NextResponse.json({
+        success: false,
+        error: 'Google Calendar access denied. Please check permissions.',
+      }, { status: 403 });
+    }
+    
     return NextResponse.json({
       success: false,
-      error: error.message,
+      error: error.message || 'Unknown error occurred',
+      details: error.stack ? error.stack.split('\n')[0] : 'No additional details',
     }, { status: 500 });
   }
 }

@@ -8,16 +8,13 @@ const LifeDashboard = () => {
   const [currentTask, setCurrentTask] = useState("Review project proposal");
   const [taskInput, setTaskInput] = useState("");
   const [todayTasks, setTodayTasks] = useState([
-    { id: 1, time: "9:00 AM", title: "Team standup", completed: true },
-    { id: 2, time: "10:30 AM", title: "Deep work: Project X", completed: true },
-    { id: 3, time: "2:00 PM", title: "Gym workout", completed: false },
-    { id: 4, time: "4:00 PM", title: "Client call", completed: false }
+    // Remove hardcoded tasks - they'll be populated from calendar
   ]);
   const [focusMode, setFocusMode] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(25);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
-  const [completedToday, setCompletedToday] = useState(2);
+  const [completedToday, setCompletedToday] = useState(0); // Changed from 2 to 0
   const [accessToken, setAccessToken] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastAiResponse, setLastAiResponse] = useState(null);
@@ -170,6 +167,7 @@ const LifeDashboard = () => {
     if (!taskInput.trim()) return;
     
     setIsProcessing(true);
+    setVoiceProcessing(false); // Clear voice processing state
     
     try {
       if (!accessToken) {
@@ -177,6 +175,9 @@ const LifeDashboard = () => {
         await authenticateWithGoogle();
         return;
       }
+
+      console.log('Submitting task to AI:', taskInput);
+      console.log('Using access token:', accessToken.substring(0, 20) + '...');
 
       // Send to AI calendar system
       const response = await fetch('/api/calendar', {
@@ -191,56 +192,35 @@ const LifeDashboard = () => {
         }),
       });
 
+      console.log('Calendar API response status:', response.status);
       const result = await response.json();
+      console.log('Calendar API result:', result);
       
       if (result.success) {
         setLastAiResponse(result);
         
-        // Add to local state for immediate feedback
-        const newTask = {
-          id: todayTasks.length + 1,
-          time: result.suggestedTime ? new Date(result.suggestedTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "Flexible",
-          title: result.aiAnalysis.title,
-          completed: false,
-          type: result.aiAnalysis.type,
-          priority: result.aiAnalysis.priority
-        };
-        
-        setTodayTasks([...todayTasks, newTask]);
-        setTaskInput("");
-        
-        // Refresh calendar events
+        // Refresh calendar events to show the new event
         await fetchCalendarEvents();
         
+        setTaskInput("");
+        
         // Show success message
-        alert(result.message);
+        alert(result.message || 'Successfully added to calendar!');
       } else {
         console.error('AI Calendar Error:', result.error);
-        alert('Failed to process with AI. Adding as basic task.');
+        console.error('Full error response:', result);
         
-        // Fallback to basic task
-        const newTask = {
-          id: todayTasks.length + 1,
-          time: "Flexible",
-          title: taskInput,
-          completed: false
-        };
-        setTodayTasks([...todayTasks, newTask]);
-        setTaskInput("");
+        // Show specific error instead of generic message
+        const errorMsg = result.error || 'Unknown error occurred';
+        alert(`AI Processing failed: ${errorMsg}\n\nCheck console for details.`);
+        
+        // Don't add as fallback task - let user know what went wrong
+        setTaskInput(""); // Clear input
       }
     } catch (error) {
       console.error('Task submission error:', error);
-      alert('Error processing request. Added as basic task.');
-      
-      // Fallback
-      const newTask = {
-        id: todayTasks.length + 1,
-        time: "Flexible", 
-        title: taskInput,
-        completed: false
-      };
-      setTodayTasks([...todayTasks, newTask]);
-      setTaskInput("");
+      alert(`Network error: ${error.message}\n\nPlease check your connection and try again.`);
+      setTaskInput(""); // Clear input
     } finally {
       setIsProcessing(false);
     }
