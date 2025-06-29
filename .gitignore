@@ -2,7 +2,6 @@
 /node_modules
 /.pnp
 .pnp.js
-.yarn/install-state.gz
 
 # testing
 /coverage
@@ -33,3 +32,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# lock files (let Railway handle dependencies)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
