@@ -62,13 +62,15 @@ export async function GET(request) {
     if (!tokens.access_token) {
       console.error('Token exchange failed:', tokens);
       // Redirect back to app with error
-      const redirectUrl = new URL('/', request.url);
+      const baseUrl = process.env.GOOGLE_REDIRECT_URI.replace('/api/auth/google', '');
+      const redirectUrl = new URL('/', baseUrl);
       redirectUrl.searchParams.set('auth_error', tokens.error || 'Token exchange failed');
       return NextResponse.redirect(redirectUrl);
     }
 
     // Successful authentication - redirect back to app with tokens
-    const redirectUrl = new URL('/', request.url);
+    const baseUrl = process.env.GOOGLE_REDIRECT_URI.replace('/api/auth/google', '');
+    const redirectUrl = new URL('/', baseUrl);
     redirectUrl.searchParams.set('access_token', tokens.access_token);
     if (tokens.refresh_token) {
       redirectUrl.searchParams.set('refresh_token', tokens.refresh_token);
@@ -80,7 +82,8 @@ export async function GET(request) {
   } catch (error) {
     console.error('Auth error:', error);
     // Redirect back to app with error
-    const redirectUrl = new URL('/', request.url);
+    const baseUrl = process.env.GOOGLE_REDIRECT_URI.replace('/api/auth/google', '');
+    const redirectUrl = new URL('/', baseUrl);
     redirectUrl.searchParams.set('auth_error', error.message);
     return NextResponse.redirect(redirectUrl);
   }

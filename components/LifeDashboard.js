@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, CheckCircle2, Circle, Timer, Brain, Sparkles, ExternalLink, TrendingUp } from 'lucide-react';
+import { Calendar, CheckCircle2, Circle, Timer, Brain, Sparkles, ExternalLink, TrendingUp, Mic, MicOff } from 'lucide-react';
 
 const LifeDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -23,6 +23,9 @@ const LifeDashboard = () => {
   const [lastAiResponse, setLastAiResponse] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [showDebug, setShowDebug] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recognition, setRecognition] = useState(null);
+  const [speechSupported, setSpeechSupported] = useState(false);
 
   // Update clock
   useEffect(() => {
@@ -224,8 +227,18 @@ const LifeDashboard = () => {
       if (result.success) {
         setCalendarEvents(result.events);
         
-        // Merge calendar events with local tasks
-        const calendarTasks = result.events.map((event, index) => ({
+        // Filter events to only show TODAY's events
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+        
+        const todaysEvents = result.events.filter(event => {
+          const eventDate = new Date(event.start.dateTime || event.start.date);
+          return eventDate >= todayStart && eventDate < todayEnd;
+        });
+        
+        // Convert today's calendar events to tasks
+        const calendarTasks = todaysEvents.map((event, index) => ({
           id: `cal-${index}`,
           time: new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
           title: event.summary,
@@ -235,7 +248,7 @@ const LifeDashboard = () => {
           eventId: event.id
         }));
         
-        // Update today's tasks to include calendar events
+        // Update today's tasks to include only TODAY's calendar events
         setTodayTasks(prev => {
           const nonCalendarTasks = prev.filter(task => !task.isCalendarEvent);
           return [...nonCalendarTasks, ...calendarTasks];
