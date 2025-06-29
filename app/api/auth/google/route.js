@@ -26,17 +26,23 @@ export async function GET(request) {
   
   try {
     // Exchange code for tokens
-    const { tokens } = await oauth2Client.getAccessToken(code);
+    const response = await oauth2Client.getAccessToken(code);
+    console.log('Token response:', response);
+    
+    if (!response.tokens) {
+      throw new Error('No tokens received from Google');
+    }
     
     return NextResponse.json({
       success: true,
-      tokens,
+      tokens: response.tokens,
     });
   } catch (error) {
     console.error('Auth error:', error);
     return NextResponse.json({
       success: false,
       error: error.message,
+      details: error.toString(),
     }, { status: 500 });
   }
 } 
