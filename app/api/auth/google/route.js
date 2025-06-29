@@ -25,14 +25,28 @@ export async function GET(request) {
   }
   
   try {
-    // Exchange code for tokens
-    const { tokens } = await oauth2Client.getAccessToken(code);
-    console.log('Received tokens:', tokens);
-    
-    if (!tokens || !tokens.access_token) {
-      throw new Error('No access token received from Google');
+    // Use direct fetch to Google's token endpoint
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code: code,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    const tokens = await tokenResponse.json();
+    console.log('Google token response:', tokens);
+
+    if (!tokens.access_token) {
+      throw new Error('No access token in response');
     }
-    
+
     return NextResponse.json({
       success: true,
       tokens: tokens,
@@ -42,7 +56,6 @@ export async function GET(request) {
     return NextResponse.json({
       success: false,
       error: error.message,
-      details: error.toString(),
     }, { status: 500 });
   }
 } 
