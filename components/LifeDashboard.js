@@ -1,20 +1,12 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, CheckCircle2, Circle, Timer, Brain, Sparkles, ExternalLink, TrendingUp, Mic, MicOff } from 'lucide-react';
+import { Calendar, CheckCircle2, Circle, Brain, ExternalLink, TrendingUp, Mic, MicOff, ChevronRight, Clock, MapPin } from 'lucide-react';
 
 const LifeDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [currentTask, setCurrentTask] = useState("Review project proposal");
   const [taskInput, setTaskInput] = useState("");
-  const [todayTasks, setTodayTasks] = useState([
-    // Remove hardcoded tasks - they'll be populated from calendar
-  ]);
-  const [focusMode, setFocusMode] = useState(false);
-  const [timerMinutes, setTimerMinutes] = useState(25);
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const [timerActive, setTimerActive] = useState(false);
-  const [completedToday, setCompletedToday] = useState(0); // Changed from 2 to 0
+  const [completedToday, setCompletedToday] = useState(0);
   const [accessToken, setAccessToken] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastAiResponse, setLastAiResponse] = useState(null);
@@ -24,6 +16,8 @@ const LifeDashboard = () => {
   const [recognition, setRecognition] = useState(null);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [voiceProcessing, setVoiceProcessing] = useState(false);
+  const [todayTasks, setTodayTasks] = useState([]);
+  const [tomorrowTasks, setTomorrowTasks] = useState([]);
 
   // Update clock
   useEffect(() => {
@@ -133,45 +127,15 @@ const LifeDashboard = () => {
     }
   }, [accessToken]);
 
-  // Timer logic
-  useEffect(() => {
-    let interval = null;
-    if (timerActive && (timerMinutes > 0 || timerSeconds > 0)) {
-      interval = setInterval(() => {
-        if (timerSeconds === 0) {
-          if (timerMinutes === 0) {
-            setTimerActive(false);
-            alert("Timer complete! Great work! 🎉");
-          } else {
-            setTimerMinutes(timerMinutes - 1);
-            setTimerSeconds(59);
-          }
-        } else {
-          setTimerSeconds(timerSeconds - 1);
-        }
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [timerActive, timerMinutes, timerSeconds]);
-
-  const handleTaskComplete = () => {
-    setCompletedToday(completedToday + 1);
-    setCurrentTask("Select your next focus");
-    setTimerActive(false);
-    setTimerMinutes(25);
-    setTimerSeconds(0);
-  };
-
   const handleTaskSubmit = async (e) => {
     e.preventDefault();
     if (!taskInput.trim()) return;
     
     setIsProcessing(true);
-    setVoiceProcessing(false); // Clear voice processing state
+    setVoiceProcessing(false);
     
     try {
       if (!accessToken) {
-        // First, need to authenticate with Google
         await authenticateWithGoogle();
         return;
       }
@@ -179,7 +143,6 @@ const LifeDashboard = () => {
       console.log('Submitting task to AI:', taskInput);
       console.log('Using access token:', accessToken.substring(0, 20) + '...');
 
-      // Send to AI calendar system
       const response = await fetch('/api/calendar', {
         method: 'POST',
         headers: {
@@ -198,54 +161,23 @@ const LifeDashboard = () => {
       
       if (result.success) {
         setLastAiResponse(result);
+        setTaskInput('');
         
-        // Refresh calendar events to show the new event
-        await fetchCalendarEvents();
-        
-        setTaskInput("");
-        
-        // Show success message
-        alert(result.message || 'Successfully added to calendar!');
+        // Refresh calendar events
+        setTimeout(() => {
+          fetchCalendarEvents();
+        }, 1000);
       } else {
-        console.error('AI Calendar Error:', result.error);
-        console.error('Full error response:', result);
+        console.error('Calendar API error:', result.error);
+        alert('Error: ' + result.error);
         
-        // Handle specific error cases
-        if (response.status === 401) {
-          // Token expired - try to refresh first
-          console.log('Access token expired, attempting refresh...');
-          const refreshed = await refreshAccessToken();
-          
-          if (refreshed) {
-            // Token refreshed successfully, retry the original request
-            console.log('Token refreshed, retrying original request...');
-            setIsProcessing(true);
-            return handleTaskSubmit(e); // Retry with new token
-          } else {
-            // Refresh failed - clear tokens and prompt reconnection
-            console.log('Token refresh failed, clearing tokens...');
-            setAccessToken(null);
-            localStorage.removeItem('google_access_token');
-            localStorage.removeItem('google_refresh_token');
-            setCalendarEvents([]);
-            setTodayTasks(prev => prev.filter(task => !task.isCalendarEvent));
-            
-            alert('🔄 Your Google Calendar connection has expired and could not be refreshed. Please reconnect to continue using AI scheduling.');
-            return;
-          }
+        if (result.error.includes('authentication') || result.error.includes('expired')) {
+          clearTokens();
         }
-        
-        // Show specific error instead of generic message
-        const errorMsg = result.error || 'Unknown error occurred';
-        alert(`AI Processing failed: ${errorMsg}\n\nCheck console for details.`);
-        
-        // Don't add as fallback task - let user know what went wrong
-        setTaskInput(""); // Clear input
       }
     } catch (error) {
-      console.error('Task submission error:', error);
-      alert(`Network error: ${error.message}\n\nPlease check your connection and try again.`);
-      setTaskInput(""); // Clear input
+      console.error('Error submitting task:', error);
+      alert('Error submitting task: ' + error.message);
     } finally {
       setIsProcessing(false);
     }
@@ -253,150 +185,155 @@ const LifeDashboard = () => {
 
   const authenticateWithGoogle = async () => {
     try {
+      console.log('Starting Google OAuth flow...');
+      
       const response = await fetch('/api/auth/google');
       const data = await response.json();
       
-      if (!data.authUrl) {
-        console.error('No auth URL received:', data);
-        alert('Authentication setup error. Please check console.');
-        return;
+      if (data.authUrl) {
+        console.log('Redirecting to Google OAuth...');
+        window.location.href = data.authUrl;
+      } else {
+        throw new Error('No auth URL received');
       }
-      
-      console.log('Redirecting to:', data.authUrl);
-      // Redirect directly instead of popup (more reliable)
-      window.location.href = data.authUrl;
     } catch (error) {
-      console.error('Auth error:', error);
-      alert('Authentication failed. Please try again.');
+      console.error('Authentication error:', error);
+      alert('Authentication failed: ' + error.message);
     }
   };
 
   const fetchCalendarEvents = async () => {
-    if (!accessToken) return;
-    
     try {
-      console.log('Fetching calendar events with token:', accessToken.substring(0, 20) + '...');
-      const response = await fetch(`/api/calendar?accessToken=${accessToken}`);
+      console.log('Fetching calendar events...');
+      const response = await fetch(`/api/calendar?accessToken=${encodeURIComponent(accessToken)}`);
       const result = await response.json();
       
-      console.log('Calendar fetch result:', result);
-      
       if (result.success) {
+        console.log('Calendar events fetched:', result.events.length);
         setCalendarEvents(result.events);
         
-        // Filter events to only show TODAY's events
-        const today = new Date();
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+        // Process events into today and tomorrow
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+        const dayAfterTomorrow = new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000);
         
-        const todaysEvents = result.events.filter(event => {
-          const eventDate = new Date(event.start.dateTime || event.start.date);
-          return eventDate >= todayStart && eventDate < todayEnd;
-        });
-        
-        // Convert today's calendar events to tasks
-        const calendarTasks = todaysEvents.map((event, index) => ({
-          id: `cal-${index}`,
-          time: new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          title: event.summary,
+        const todayEvents = result.events.filter(event => {
+          const eventDate = new Date(event.start?.dateTime || event.start?.date);
+          return eventDate >= today && eventDate < tomorrow;
+        }).map(event => ({
+          id: event.id,
+          title: event.summary || 'Untitled Event',
+          time: formatEventTime(event),
           completed: false,
-          isCalendarEvent: true,
-          type: 'calendar',
-          eventId: event.id
+          location: event.location,
+          description: event.description
         }));
         
-        // Update today's tasks to include only TODAY's calendar events
-        setTodayTasks(prev => {
-          const nonCalendarTasks = prev.filter(task => !task.isCalendarEvent);
-          return [...nonCalendarTasks, ...calendarTasks];
-        });
+        const tomorrowEvents = result.events.filter(event => {
+          const eventDate = new Date(event.start?.dateTime || event.start?.date);
+          return eventDate >= tomorrow && eventDate < dayAfterTomorrow;
+        }).map(event => ({
+          id: event.id,
+          title: event.summary || 'Untitled Event',
+          time: formatEventTime(event),
+          completed: false,
+          location: event.location,
+          description: event.description
+        }));
+        
+        setTodayTasks(todayEvents);
+        setTomorrowTasks(tomorrowEvents);
+        
       } else {
-        console.error('Calendar fetch failed:', result);
-        // If token is invalid/expired, try to refresh first
-        if (response.status === 401) {
-          console.log('Calendar access token expired, attempting refresh...');
-          const refreshed = await refreshAccessToken();
-          
-          if (refreshed) {
-            // Token refreshed successfully, retry fetching calendar events
-            console.log('Token refreshed, retrying calendar fetch...');
-            return fetchCalendarEvents(); // Retry with new token
-          } else {
-            // Refresh failed - clear tokens
-            console.log('Token refresh failed, clearing tokens...');
-            setAccessToken(null);
-            localStorage.removeItem('google_access_token');
-            localStorage.removeItem('google_refresh_token');
-            setCalendarEvents([]);
-            setTodayTasks(prev => prev.filter(task => !task.isCalendarEvent));
-          }
+        console.error('Failed to fetch calendar events:', result.error);
+        
+        if (result.error.includes('Invalid or expired')) {
+          await refreshAccessToken();
         }
       }
     } catch (error) {
-      console.error('Fetch calendar error:', error);
+      console.error('Error fetching calendar events:', error);
+    }
+  };
+
+  const formatEventTime = (event) => {
+    if (event.start?.dateTime) {
+      const startTime = new Date(event.start.dateTime);
+      const endTime = new Date(event.end?.dateTime);
+      return `${startTime.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      })} - ${endTime.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      })}`;
+    } else {
+      return 'All Day';
     }
   };
 
   const clearTokens = () => {
-    setAccessToken(null);
     localStorage.removeItem('google_access_token');
     localStorage.removeItem('google_refresh_token');
+    setAccessToken(null);
     setCalendarEvents([]);
-    setTodayTasks(prev => prev.filter(task => !task.isCalendarEvent));
-    alert('Tokens cleared. You can now try reconnecting.');
+    setTodayTasks([]);
+    setTomorrowTasks([]);
   };
 
   const refreshAccessToken = async () => {
-    const refreshToken = localStorage.getItem('google_refresh_token');
-    
-    if (!refreshToken) {
-      console.log('No refresh token available, user needs to reconnect');
-      return false;
-    }
-    
     try {
-      console.log('Attempting to refresh access token...');
-      const response = await fetch('/api/auth/google', {
+      const refreshToken = localStorage.getItem('google_refresh_token');
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          refresh_token: refreshToken,
-        }),
+        body: JSON.stringify({ refreshToken }),
       });
+
+      const data = await response.json();
       
-      const result = await response.json();
-      
-      if (result.success && result.access_token) {
-        console.log('Access token refreshed successfully');
-        setAccessToken(result.access_token);
-        localStorage.setItem('google_access_token', result.access_token);
+      if (data.success && data.accessToken) {
+        setAccessToken(data.accessToken);
+        localStorage.setItem('google_access_token', data.accessToken);
         
-        // Update refresh token if a new one was provided
-        if (result.refresh_token) {
-          localStorage.setItem('google_refresh_token', result.refresh_token);
-        }
-        
-        return true;
+        // Retry fetching events
+        setTimeout(() => {
+          fetchCalendarEvents();
+        }, 100);
       } else {
-        console.error('Token refresh failed:', result);
-        return false;
+        throw new Error('Failed to refresh token');
       }
     } catch (error) {
-      console.error('Token refresh error:', error);
-      return false;
+      console.error('Token refresh failed:', error);
+      clearTokens();
+      alert('Your Google Calendar connection has expired. Please reconnect.');
     }
   };
 
   const toggleTask = (id) => {
-    setTodayTasks(todayTasks.map(task => 
-      task.id === id ? { ...task, completed: !task.completed } : task
-    ));
-    if (!todayTasks.find(t => t.id === id).completed) {
-      setCompletedToday(completedToday + 1);
-    } else {
-      setCompletedToday(completedToday - 1);
+    setTodayTasks(tasks => 
+      tasks.map(task => 
+        task.id === id 
+          ? { ...task, completed: !task.completed }
+          : task
+      )
+    );
+    
+    // Update completed count
+    const task = todayTasks.find(t => t.id === id);
+    if (task && !task.completed) {
+      setCompletedToday(prev => prev + 1);
+    } else if (task && task.completed) {
+      setCompletedToday(prev => Math.max(0, prev - 1));
     }
   };
 
@@ -407,12 +344,9 @@ const LifeDashboard = () => {
     return "Good evening";
   };
 
-  const completionRate = Math.round((completedToday / todayTasks.length) * 100) || 0;
-
   const startVoiceRecording = () => {
     if (recognition && !isRecording) {
       setIsRecording(true);
-      setTaskInput(""); // Clear existing text
       recognition.start();
     }
   };
@@ -420,142 +354,202 @@ const LifeDashboard = () => {
   const stopVoiceRecording = () => {
     if (recognition && isRecording) {
       recognition.stop();
-      setIsRecording(false);
     }
   };
 
+  const completionRate = todayTasks.length > 0 ? Math.round((completedToday / todayTasks.length) * 100) : 0;
+
   return (
-    <div className={`min-h-screen ${focusMode ? 'bg-gray-900' : 'bg-gray-50'} transition-all duration-500`}>
+    <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-6 py-6 max-w-6xl">
         {/* Header */}
-        <div className={`mb-4 ${focusMode ? 'opacity-20' : ''} transition-opacity`}>
-          <h1 className="text-xl font-semibold text-gray-900">{getGreeting()}, Tim</h1>
-          <p className="text-gray-500 text-sm">{currentTime.toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">{getGreeting()}, Tim</h1>
+          <p className="text-gray-600">{currentTime.toLocaleString('en-US', { 
+            weekday: 'long', 
+            month: 'long', 
+            day: 'numeric',
+            year: 'numeric'
+          })}</p>
         </div>
 
-        {/* Stats Cards with Colored Borders */}
-        <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 ${focusMode ? 'opacity-20' : ''} transition-opacity`}>
-          <div className={`relative overflow-hidden rounded-xl p-4 shadow-sm border transition-all duration-300 hover:shadow-md ${todayTasks.length > 0 ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200' : 'bg-gradient-to-br from-red-50 to-rose-50 border-red-200'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-gray-600">Tasks Today</p>
-              <div className={`text-xs font-semibold px-2 py-1 rounded-full ${todayTasks.length > 0 ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>
-                {todayTasks.length > 0 ? 'Active' : 'Empty'}
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className={`relative overflow-hidden rounded-xl p-6 shadow-sm border transition-all duration-300 hover:shadow-md ${todayTasks.length > 0 ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200' : 'bg-gradient-to-br from-gray-50 to-slate-50 border-gray-200'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-gray-600">Today's Schedule</p>
+              <div className={`text-xs font-semibold px-2 py-1 rounded-full ${todayTasks.length > 0 ? 'text-blue-700 bg-blue-100' : 'text-gray-700 bg-gray-100'}`}>
+                {todayTasks.length > 0 ? 'Active' : 'Open'}
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900 mb-1">{todayTasks.length}</p>
-            <p className="text-xs text-gray-500">Total scheduled</p>
-            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${todayTasks.length > 0 ? 'bg-green-400' : 'bg-red-400'} transform translate-x-6 -translate-y-6`}></div>
+            <p className="text-3xl font-bold text-gray-900 mb-2">{todayTasks.length}</p>
+            <p className="text-sm text-gray-500">Events scheduled</p>
+            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${todayTasks.length > 0 ? 'bg-blue-400' : 'bg-gray-400'} transform translate-x-6 -translate-y-6`}></div>
           </div>
           
-          <div className={`relative overflow-hidden rounded-xl p-4 shadow-sm border transition-all duration-300 hover:shadow-md ${completedToday >= 2 ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200' : 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-gray-600">Completed</p>
-              <div className={`text-xs font-semibold flex items-center gap-1 ${completedToday >= 2 ? 'text-blue-700' : 'text-orange-700'}`}>
+          <div className={`relative overflow-hidden rounded-xl p-6 shadow-sm border transition-all duration-300 hover:shadow-md ${completedToday >= 1 ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200' : 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-gray-600">Completed</p>
+              <div className={`text-xs font-semibold flex items-center gap-1 ${completedToday >= 1 ? 'text-green-700' : 'text-orange-700'}`}>
                 <TrendingUp size={12} />
                 +{completedToday}
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900 mb-1">{completedToday}</p>
-            <p className="text-xs text-gray-500">Tasks done today</p>
-            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${completedToday >= 2 ? 'bg-blue-400' : 'bg-orange-400'} transform translate-x-6 -translate-y-6`}></div>
+            <p className="text-3xl font-bold text-gray-900 mb-2">{completedToday}</p>
+            <p className="text-sm text-gray-500">Tasks finished today</p>
+            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${completedToday >= 1 ? 'bg-green-400' : 'bg-orange-400'} transform translate-x-6 -translate-y-6`}></div>
           </div>
           
-          <div className={`relative overflow-hidden rounded-xl p-4 shadow-sm border transition-all duration-300 hover:shadow-md ${completionRate >= 50 ? 'bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200' : 'bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-200'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-gray-600">Completion Rate</p>
+          <div className={`relative overflow-hidden rounded-xl p-6 shadow-sm border transition-all duration-300 hover:shadow-md ${completionRate >= 50 ? 'bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200' : 'bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-200'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-gray-600">Progress</p>
               <div className={`text-xs font-semibold ${completionRate >= 50 ? 'text-purple-700' : 'text-yellow-700'}`}>
-                {completionRate >= 50 ? 'On track' : 'Behind'}
+                {completionRate >= 50 ? 'On track' : 'Getting started'}
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900 mb-1">{completionRate}%</p>
-            <p className="text-xs text-gray-500">Daily progress</p>
+            <p className="text-3xl font-bold text-gray-900 mb-2">{completionRate}%</p>
+            <p className="text-sm text-gray-500">Daily completion rate</p>
             <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${completionRate >= 50 ? 'bg-purple-400' : 'bg-yellow-400'} transform translate-x-6 -translate-y-6`}></div>
-          </div>
-          
-          <div className={`relative overflow-hidden rounded-xl p-4 shadow-sm border transition-all duration-300 hover:shadow-md ${completedToday >= 2 ? 'bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200' : 'bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-gray-600">Focus Time</p>
-              <div className={`text-xs font-semibold ${completedToday >= 2 ? 'text-teal-700' : 'text-pink-700'}`}>
-                {completedToday >= 2 ? 'Good' : 'Low'}
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-gray-900 mb-1">{Math.floor(completedToday * 25 / 60)}h {(completedToday * 25) % 60}m</p>
-            <p className="text-xs text-gray-500">Time in focus</p>
-            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${completedToday >= 2 ? 'bg-teal-400' : 'bg-pink-400'} transform translate-x-6 -translate-y-6`}></div>
           </div>
         </div>
 
-        {/* Today's Schedule - Moved Higher */}
-        <div className={`grid md:grid-cols-3 gap-4 mb-6 ${focusMode ? 'opacity-20' : ''} transition-opacity`}>
-          <div className="md:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
-                <Calendar className="text-purple-500" size={16} />
+        {/* Main Schedule Grid */}
+        <div className="grid lg:grid-cols-3 gap-6 mb-8">
+          {/* Today's Schedule */}
+          <div className="lg:col-span-1 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                <Calendar className="text-blue-500" size={20} />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Today's Schedule</h3>
-                <p className="text-xs text-gray-500">Click any task to focus</p>
+                <h3 className="text-xl font-semibold text-gray-900">Today</h3>
+                <p className="text-sm text-gray-500">{todayTasks.length} events scheduled</p>
               </div>
             </div>
             
-            <div className="space-y-2">
-              {todayTasks.map(task => (
-                <div
-                  key={task.id}
-                  className={`flex items-center gap-3 p-2 rounded-lg transition-all cursor-pointer hover:bg-gray-50 ${
-                    task.completed ? 'opacity-50' : ''
-                  }`}
-                  onClick={() => !task.completed && setCurrentTask(task.title)}
-                >
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleTask(task.id);
-                    }}
-                    className={`transition-colors ${
-                      task.completed ? 'text-green-500' : 'text-gray-300 hover:text-gray-400'
+            <div className="space-y-3">
+              {todayTasks.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Calendar className="text-gray-400" size={24} />
+                  </div>
+                  <p className="text-gray-500 text-sm">No events scheduled for today</p>
+                  <p className="text-gray-400 text-xs mt-1">Use the AI scheduler to add some!</p>
+                </div>
+              ) : (
+                todayTasks.map(task => (
+                  <div
+                    key={task.id}
+                    className={`flex items-start gap-3 p-3 rounded-lg transition-all cursor-pointer hover:bg-gray-50 ${
+                      task.completed ? 'opacity-60' : ''
                     }`}
                   >
-                    {task.completed ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                  </button>
-                  <div className="flex-1">
-                    <p className={`text-sm font-medium ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                      {task.title}
-                    </p>
-                    <p className="text-xs text-gray-500">{task.time}</p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTask(task.id);
+                      }}
+                      className={`mt-0.5 transition-colors ${
+                        task.completed ? 'text-green-500' : 'text-gray-300 hover:text-gray-400'
+                      }`}
+                    >
+                      {task.completed ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                        {task.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Clock size={12} className="text-gray-400" />
+                        <p className="text-xs text-gray-500">{task.time}</p>
+                      </div>
+                      {task.location && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <MapPin size={12} className="text-gray-400" />
+                          <p className="text-xs text-gray-500 truncate">{task.location}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
-          {/* Quick Add - Smaller */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center">
-                <Brain className="text-orange-500" size={16} />
+          {/* Tomorrow's Schedule */}
+          <div className="lg:col-span-1 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+                <ChevronRight className="text-indigo-500" size={20} />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Quick Add</h3>
-                <p className="text-xs text-gray-500">AI organizes it</p>
+                <h3 className="text-xl font-semibold text-gray-900">Tomorrow</h3>
+                <p className="text-sm text-gray-500">{tomorrowTasks.length} events scheduled</p>
               </div>
             </div>
             
-            <div>
+            <div className="space-y-3">
+              {tomorrowTasks.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <ChevronRight className="text-gray-400" size={24} />
+                  </div>
+                  <p className="text-gray-500 text-sm">No events scheduled for tomorrow</p>
+                  <p className="text-gray-400 text-xs mt-1">Plan ahead with the AI scheduler!</p>
+                </div>
+              ) : (
+                tomorrowTasks.map(task => (
+                  <div
+                    key={task.id}
+                    className="flex items-start gap-3 p-3 rounded-lg transition-all hover:bg-gray-50"
+                  >
+                    <div className="w-4 h-4 mt-0.5 border-2 border-gray-300 rounded-full"></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{task.title}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Clock size={12} className="text-gray-400" />
+                        <p className="text-xs text-gray-500">{task.time}</p>
+                      </div>
+                      {task.location && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <MapPin size={12} className="text-gray-400" />
+                          <p className="text-xs text-gray-500 truncate">{task.location}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* AI Quick Add */}
+          <div className="lg:col-span-1 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
+                <Brain className="text-orange-500" size={20} />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">AI Scheduler</h3>
+                <p className="text-sm text-gray-500">Add events naturally</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
               <div className="relative">
                 <input
                   type="text"
                   value={taskInput}
                   onChange={(e) => setTaskInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleTaskSubmit(e)}
-                  placeholder={accessToken ? (isRecording ? "Listening..." : "Tell me what you need to do...") : "Connect Google Calendar first..."}
-                  className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  placeholder={accessToken ? (isRecording ? "Listening..." : "\"Meet with John tomorrow at 2pm\"") : "Connect Google Calendar first..."}
+                  className="w-full px-4 py-3 pr-12 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   disabled={isProcessing || isRecording}
                 />
                 {speechSupported && !isProcessing && (
                   <button
                     onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                    className={`absolute right-2 top-2 p-1 rounded-full transition-all ${
+                    className={`absolute right-3 top-3 p-1.5 rounded-full transition-all ${
                       isRecording 
                         ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse' 
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -567,28 +561,28 @@ const LifeDashboard = () => {
                   </button>
                 )}
                 {isProcessing && (
-                  <div className="absolute right-2 top-2.5">
-                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-top-transparent rounded-full"></div>
+                  <div className="absolute right-3 top-3.5">
+                    <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-top-transparent rounded-full"></div>
                   </div>
                 )}
               </div>
               
               {isRecording && (
-                <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                <div className="flex items-center gap-2 text-sm text-red-600">
                   <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                   <span>Listening... Speak now!</span>
                 </div>
               )}
               
               {voiceProcessing && (
-                <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
+                <div className="flex items-center gap-2 text-sm text-blue-600">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                   <span>Processing voice input...</span>
                 </div>
               )}
               
               {!speechSupported && accessToken && (
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
                   💡 Voice input not supported in this browser. Try Chrome or Edge for voice features.
                 </div>
               )}
@@ -596,7 +590,7 @@ const LifeDashboard = () => {
               {!accessToken ? (
                 <button
                   onClick={authenticateWithGoogle}
-                  className="mt-2 w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
                   🔗 Connect Google Calendar
                 </button>
@@ -604,15 +598,16 @@ const LifeDashboard = () => {
                 <div>
                   <button
                     onClick={handleTaskSubmit}
-                    disabled={isProcessing}
-                    className="mt-2 w-full px-3 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
+                    disabled={isProcessing || !taskInput.trim()}
+                    className="w-full px-4 py-3 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isProcessing ? '🤖 AI Processing...' : '🤖 AI Schedule'}
+                    {isProcessing ? '🤖 AI Processing...' : '🤖 Add to Schedule'}
                   </button>
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="flex items-center gap-1">
+                  
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-xs text-green-600">Connected</span>
+                      <span className="text-xs text-green-600">Calendar Connected</span>
                     </div>
                     <button
                       onClick={() => setShowDebug(!showDebug)}
@@ -621,192 +616,137 @@ const LifeDashboard = () => {
                       Debug
                     </button>
                   </div>
+                  
+                  {showDebug && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg text-xs space-y-2">
+                      <div>Status: {accessToken ? '✅ Connected' : '❌ Not Connected'}</div>
+                      <div>Token: {accessToken ? accessToken.substring(0, 20) + '...' : 'None'}</div>
+                      <div>Events: {calendarEvents.length}</div>
+                      <button
+                        onClick={clearTokens}
+                        className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200 transition-colors"
+                      >
+                        Clear Connection
+                      </button>
+                    </div>
+                  )}
+                  
+                  {lastAiResponse && (
+                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm text-green-700">{lastAiResponse.message}</p>
+                    </div>
+                  )}
                 </div>
               )}
               
-              {showDebug && (
-                <div className="mt-2 p-2 bg-gray-50 rounded-lg text-xs">
-                  <div className="space-y-1">
-                    <div>Status: {accessToken ? '✅ Connected' : '❌ Not Connected'}</div>
-                    <div>Token: {accessToken ? accessToken.substring(0, 20) + '...' : 'None'}</div>
-                    <div>Events: {calendarEvents.length}</div>
-                    <button
-                      onClick={clearTokens}
-                      className="mt-1 px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200"
-                    >
-                      Clear Tokens
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {lastAiResponse && (
-                <div className="mt-2 p-2 bg-green-50 rounded-lg">
-                  <p className="text-xs text-green-700">{lastAiResponse.message}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Current Focus - Compact */}
-        <div className={`bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-4 ${focusMode ? 'scale-105 shadow-xl border-blue-200' : ''} transition-all duration-300`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                <Sparkles className="text-blue-500" size={16} />
+              <div className="text-xs text-gray-500 space-y-1">
+                <p className="font-medium">💡 Try saying:</p>
+                <p>• "Schedule a meeting with Sarah tomorrow at 3pm"</p>
+                <p>• "Block 2 hours for project work Friday morning"</p>
+                <p>• "Lunch with mom next Tuesday"</p>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Current Focus</h2>
-                <p className="text-xs text-gray-500">Your active task</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setFocusMode(!focusMode)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                focusMode 
-                  ? 'bg-gray-900 text-white hover:bg-gray-800' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {focusMode ? 'Exit Focus' : 'Focus Mode'}
-            </button>
-          </div>
-          
-          <div className="text-center py-4">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">{currentTask}</h3>
-            
-            <div className="inline-flex items-center justify-center bg-gray-50 rounded-xl px-8 py-4 mb-4">
-              <div className="text-3xl font-mono font-medium text-gray-700">
-                {String(timerMinutes).padStart(2, '0')}:{String(timerSeconds).padStart(2, '0')}
-              </div>
-            </div>
-            
-            <div className="flex gap-2 justify-center">
-              <button
-                onClick={() => setTimerActive(!timerActive)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  timerActive 
-                    ? 'bg-red-500 text-white hover:bg-red-600' 
-                    : 'bg-blue-500 text-white hover:bg-blue-600'
-                }`}
-              >
-                <Timer className="inline mr-1" size={14} />
-                {timerActive ? 'Pause' : 'Start'}
-              </button>
-              
-              <button
-                onClick={handleTaskComplete}
-                className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-all"
-              >
-                <CheckCircle2 className="inline mr-1" size={14} />
-                Complete
-              </button>
-              
-              <button
-                onClick={() => setCurrentTask("Select your next focus")}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-all"
-              >
-                Skip
-              </button>
             </div>
           </div>
         </div>
 
         {/* Quick Links */}
-        <div className={`${focusMode ? 'opacity-20' : ''} transition-opacity`}>
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Quick Access</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Projects Card */}
-              <a
-                href="https://onetask.today"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-transparent"></div>
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-                      </svg>
-                    </div>
-                    <ExternalLink size={18} className="opacity-60 group-hover:opacity-100 transition-opacity" />
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-6">Quick Access</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Projects Card */}
+            <a
+              href="https://onetask.today"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-transparent"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                    </svg>
                   </div>
-                  <h4 className="text-xl font-bold mb-2">Projects</h4>
-                  <p className="text-blue-100 text-sm opacity-90">Manage your active projects and deadlines</p>
-                  <div className="mt-4 flex items-center text-xs">
-                    <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
-                    <span className="opacity-80">3 Active</span>
-                  </div>
+                  <ExternalLink size={18} className="opacity-60 group-hover:opacity-100 transition-opacity" />
                 </div>
-              </a>
+                <h4 className="text-xl font-bold mb-2">Projects</h4>
+                <p className="text-blue-100 text-sm opacity-90">Manage your active projects and deadlines</p>
+                <div className="mt-4 flex items-center text-xs">
+                  <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                  <span className="opacity-80">3 Active</span>
+                </div>
+              </div>
+            </a>
 
-              {/* Fitness Card */}
-              <a
-                href="https://dohardshit.today"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-500 to-red-600 p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-400/20 to-transparent"></div>
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/>
-                      </svg>
-                    </div>
-                    <ExternalLink size={18} className="opacity-60 group-hover:opacity-100 transition-opacity" />
+            {/* Fitness Card */}
+            <a
+              href="https://dohardshit.today"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-500 to-red-600 p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-400/20 to-transparent"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/>
+                    </svg>
                   </div>
-                  <h4 className="text-xl font-bold mb-2">Fitness</h4>
-                  <p className="text-orange-100 text-sm opacity-90">Track workouts and fitness goals</p>
-                  <div className="mt-4 flex items-center text-xs">
-                    <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
-                    <span className="opacity-80">2 this week</span>
-                  </div>
+                  <ExternalLink size={18} className="opacity-60 group-hover:opacity-100 transition-opacity" />
                 </div>
-              </a>
+                <h4 className="text-xl font-bold mb-2">Fitness</h4>
+                <p className="text-orange-100 text-sm opacity-90">Track workouts and fitness goals</p>
+                <div className="mt-4 flex items-center text-xs">
+                  <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
+                  <span className="opacity-80">2 this week</span>
+                </div>
+              </div>
+            </a>
 
-              {/* Google Calendar Card */}
-              <a
-                href="https://calendar.google.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-green-400/20 to-transparent"></div>
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                      <Calendar size={24} />
-                    </div>
-                    <ExternalLink size={18} className="opacity-60 group-hover:opacity-100 transition-opacity" />
+            {/* Google Calendar Card */}
+            <a
+              href="https://calendar.google.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-green-400/20 to-transparent"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                    <Calendar size={24} />
                   </div>
-                  <h4 className="text-xl font-bold mb-2">Calendar</h4>
-                  <p className="text-green-100 text-sm opacity-90">View full calendar and upcoming events</p>
-                  <div className="mt-4 flex items-center text-xs">
-                    <div className={`w-2 h-2 rounded-full mr-2 ${accessToken ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                    <span className="opacity-80">{accessToken ? 'Connected' : 'Disconnected'}</span>
-                  </div>
+                  <ExternalLink size={18} className="opacity-60 group-hover:opacity-100 transition-opacity" />
                 </div>
-              </a>
-            </div>
+                <h4 className="text-xl font-bold mb-2">Calendar</h4>
+                <p className="text-green-100 text-sm opacity-90">View full calendar and upcoming events</p>
+                <div className="mt-4 flex items-center text-xs">
+                  <div className={`w-2 h-2 rounded-full mr-2 ${accessToken ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                  <span className="opacity-80">{accessToken ? 'Connected' : 'Disconnected'}</span>
+                </div>
+              </div>
+            </a>
+          </div>
 
-            {/* Additional Quick Actions */}
-            <div className="mt-6 pt-6 border-t border-gray-100">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Need something else?</span>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 transition-colors">
-                    Add Widget
-                  </button>
-                  <button className="px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded-lg text-blue-600 transition-colors">
-                    Customize
-                  </button>
-                </div>
+          {/* Additional Quick Actions */}
+          <div className="mt-6 pt-6 border-t border-gray-100">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500">Focus on what matters most</span>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => window.open('https://calendar.google.com', '_blank')}
+                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 transition-colors"
+                >
+                  View Full Calendar
+                </button>
+                <button 
+                  onClick={fetchCalendarEvents}
+                  className="px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded-lg text-blue-600 transition-colors"
+                >
+                  Refresh
+                </button>
               </div>
             </div>
           </div>
