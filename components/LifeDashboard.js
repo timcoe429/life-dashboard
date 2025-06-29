@@ -29,11 +29,20 @@ const LifeDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Load saved access token and fetch calendar events
+  // Load saved access token and check for OAuth callback
   useEffect(() => {
     const savedToken = localStorage.getItem('google_access_token');
     if (savedToken) {
       setAccessToken(savedToken);
+    }
+    
+    // Check if we're returning from OAuth
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      exchangeCodeForTokens(code);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
@@ -158,21 +167,8 @@ const LifeDashboard = () => {
       const response = await fetch('/api/auth/google');
       const { authUrl } = await response.json();
       
-      // Open popup for authentication
-      const popup = window.open(authUrl, 'google-auth', 'width=500,height=600');
-      
-      // Listen for the popup to close with tokens
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          // Check if we got tokens (this would be more robust with postMessage)
-          const params = new URLSearchParams(window.location.search);
-          const code = params.get('code');
-          if (code) {
-            exchangeCodeForTokens(code);
-          }
-        }
-      }, 1000);
+      // Redirect directly instead of popup (more reliable)
+      window.location.href = authUrl;
     } catch (error) {
       console.error('Auth error:', error);
       alert('Authentication failed. Please try again.');
