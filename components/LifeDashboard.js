@@ -284,7 +284,7 @@ const LifeDashboard = () => {
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Access</h3>
               <div className="space-y-3">
-                
+                <a
                   href="https://onetask.today"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -294,6 +294,7 @@ const LifeDashboard = () => {
                   <ExternalLink size={16} className="text-gray-400 group-hover:text-gray-600" />
                 </a>
                 
+                <a
                   href="https://dohardshit.today"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -303,6 +304,7 @@ const LifeDashboard = () => {
                   <ExternalLink size={16} className="text-gray-400 group-hover:text-gray-600" />
                 </a>
                 
+                <a
                   href="#"
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors group"
                 >
