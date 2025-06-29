@@ -434,50 +434,54 @@ const LifeDashboard = () => {
         </div>
 
         {/* Stats Cards with Colored Borders */}
-        <div className={`grid grid-cols-4 gap-3 mb-6 ${focusMode ? 'opacity-20' : ''} transition-opacity`}>
-          <div className={`bg-white rounded-lg p-4 shadow-sm border-2 ${todayTasks.length > 0 ? 'border-green-200' : 'border-red-200'}`}>
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-gray-500">Tasks Today</p>
-              <div className={`text-xs font-medium px-2 py-1 rounded ${todayTasks.length > 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+        <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 ${focusMode ? 'opacity-20' : ''} transition-opacity`}>
+          <div className={`relative overflow-hidden rounded-xl p-4 shadow-sm border transition-all duration-300 hover:shadow-md ${todayTasks.length > 0 ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200' : 'bg-gradient-to-br from-red-50 to-rose-50 border-red-200'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-600">Tasks Today</p>
+              <div className={`text-xs font-semibold px-2 py-1 rounded-full ${todayTasks.length > 0 ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>
                 {todayTasks.length > 0 ? 'Active' : 'Empty'}
               </div>
             </div>
-            <p className="text-xl font-semibold text-gray-900">{todayTasks.length}</p>
-            <p className="text-xs text-gray-400">Total scheduled</p>
+            <p className="text-2xl font-bold text-gray-900 mb-1">{todayTasks.length}</p>
+            <p className="text-xs text-gray-500">Total scheduled</p>
+            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${todayTasks.length > 0 ? 'bg-green-400' : 'bg-red-400'} transform translate-x-6 -translate-y-6`}></div>
           </div>
           
-          <div className={`bg-white rounded-lg p-4 shadow-sm border-2 ${completedToday >= 2 ? 'border-green-200' : 'border-red-200'}`}>
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-gray-500">Completed</p>
-              <div className={`text-xs font-medium flex items-center gap-1 ${completedToday >= 2 ? 'text-green-600' : 'text-red-600'}`}>
-                <TrendingUp size={10} />
+          <div className={`relative overflow-hidden rounded-xl p-4 shadow-sm border transition-all duration-300 hover:shadow-md ${completedToday >= 2 ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200' : 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-600">Completed</p>
+              <div className={`text-xs font-semibold flex items-center gap-1 ${completedToday >= 2 ? 'text-blue-700' : 'text-orange-700'}`}>
+                <TrendingUp size={12} />
                 +{completedToday}
               </div>
             </div>
-            <p className="text-xl font-semibold text-gray-900">{completedToday}</p>
-            <p className="text-xs text-gray-400">Tasks done today</p>
+            <p className="text-2xl font-bold text-gray-900 mb-1">{completedToday}</p>
+            <p className="text-xs text-gray-500">Tasks done today</p>
+            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${completedToday >= 2 ? 'bg-blue-400' : 'bg-orange-400'} transform translate-x-6 -translate-y-6`}></div>
           </div>
           
-          <div className={`bg-white rounded-lg p-4 shadow-sm border-2 ${completionRate >= 50 ? 'border-green-200' : 'border-red-200'}`}>
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-gray-500">Completion Rate</p>
-              <div className={`text-xs font-medium ${completionRate >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+          <div className={`relative overflow-hidden rounded-xl p-4 shadow-sm border transition-all duration-300 hover:shadow-md ${completionRate >= 50 ? 'bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200' : 'bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-200'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-600">Completion Rate</p>
+              <div className={`text-xs font-semibold ${completionRate >= 50 ? 'text-purple-700' : 'text-yellow-700'}`}>
                 {completionRate >= 50 ? 'On track' : 'Behind'}
               </div>
             </div>
-            <p className="text-xl font-semibold text-gray-900">{completionRate}%</p>
-            <p className="text-xs text-gray-400">Daily progress</p>
+            <p className="text-2xl font-bold text-gray-900 mb-1">{completionRate}%</p>
+            <p className="text-xs text-gray-500">Daily progress</p>
+            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${completionRate >= 50 ? 'bg-purple-400' : 'bg-yellow-400'} transform translate-x-6 -translate-y-6`}></div>
           </div>
           
-          <div className={`bg-white rounded-lg p-4 shadow-sm border-2 ${completedToday >= 2 ? 'border-green-200' : 'border-red-200'}`}>
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-gray-500">Focus Time</p>
-              <div className={`text-xs font-medium ${completedToday >= 2 ? 'text-green-600' : 'text-red-600'}`}>
+          <div className={`relative overflow-hidden rounded-xl p-4 shadow-sm border transition-all duration-300 hover:shadow-md ${completedToday >= 2 ? 'bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200' : 'bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-600">Focus Time</p>
+              <div className={`text-xs font-semibold ${completedToday >= 2 ? 'text-teal-700' : 'text-pink-700'}`}>
                 {completedToday >= 2 ? 'Good' : 'Low'}
               </div>
             </div>
-            <p className="text-xl font-semibold text-gray-900">{Math.floor(completedToday * 25 / 60)}h {(completedToday * 25) % 60}m</p>
-            <p className="text-xs text-gray-400">Time in focus</p>
+            <p className="text-2xl font-bold text-gray-900 mb-1">{Math.floor(completedToday * 25 / 60)}h {(completedToday * 25) % 60}m</p>
+            <p className="text-xs text-gray-500">Time in focus</p>
+            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 ${completedToday >= 2 ? 'bg-teal-400' : 'bg-pink-400'} transform translate-x-6 -translate-y-6`}></div>
           </div>
         </div>
 
@@ -711,38 +715,99 @@ const LifeDashboard = () => {
 
         {/* Quick Links */}
         <div className={`${focusMode ? 'opacity-20' : ''} transition-opacity`}>
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Access</h3>
-            <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-6">Quick Access</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Projects Card */}
               <a
                 href="https://onetask.today"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors group"
+                className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
               >
-                <span className="text-sm font-medium text-gray-700">Projects</span>
-                <ExternalLink size={14} className="text-gray-400 group-hover:text-gray-600" />
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-transparent"></div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                      </svg>
+                    </div>
+                    <ExternalLink size={18} className="opacity-60 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <h4 className="text-xl font-bold mb-2">Projects</h4>
+                  <p className="text-blue-100 text-sm opacity-90">Manage your active projects and deadlines</p>
+                  <div className="mt-4 flex items-center text-xs">
+                    <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                    <span className="opacity-80">3 Active</span>
+                  </div>
+                </div>
               </a>
-              
+
+              {/* Fitness Card */}
               <a
                 href="https://dohardshit.today"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors group"
+                className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-500 to-red-600 p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
               >
-                <span className="text-sm font-medium text-gray-700">Fitness</span>
-                <ExternalLink size={14} className="text-gray-400 group-hover:text-gray-600" />
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-400/20 to-transparent"></div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/>
+                      </svg>
+                    </div>
+                    <ExternalLink size={18} className="opacity-60 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <h4 className="text-xl font-bold mb-2">Fitness</h4>
+                  <p className="text-orange-100 text-sm opacity-90">Track workouts and fitness goals</p>
+                  <div className="mt-4 flex items-center text-xs">
+                    <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
+                    <span className="opacity-80">2 this week</span>
+                  </div>
+                </div>
               </a>
-              
+
+              {/* Google Calendar Card */}
               <a
                 href="https://calendar.google.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors group"
+                className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
               >
-                <span className="text-sm font-medium text-gray-700">G-Cal</span>
-                <ExternalLink size={14} className="text-gray-400 group-hover:text-gray-600" />
+                <div className="absolute inset-0 bg-gradient-to-br from-green-400/20 to-transparent"></div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                      <Calendar size={24} />
+                    </div>
+                    <ExternalLink size={18} className="opacity-60 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <h4 className="text-xl font-bold mb-2">Calendar</h4>
+                  <p className="text-green-100 text-sm opacity-90">View full calendar and upcoming events</p>
+                  <div className="mt-4 flex items-center text-xs">
+                    <div className={`w-2 h-2 rounded-full mr-2 ${accessToken ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                    <span className="opacity-80">{accessToken ? 'Connected' : 'Disconnected'}</span>
+                  </div>
+                </div>
               </a>
+            </div>
+
+            {/* Additional Quick Actions */}
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Need something else?</span>
+                <div className="flex gap-2">
+                  <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 transition-colors">
+                    Add Widget
+                  </button>
+                  <button className="px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded-lg text-blue-600 transition-colors">
+                    Customize
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
