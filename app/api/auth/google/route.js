@@ -61,18 +61,27 @@ export async function GET(request) {
 
     if (!tokens.access_token) {
       console.error('Token exchange failed:', tokens);
-      throw new Error(`Token exchange failed: ${tokens.error || 'No access token received'}`);
+      // Redirect back to app with error
+      const redirectUrl = new URL('/', request.url);
+      redirectUrl.searchParams.set('auth_error', tokens.error || 'Token exchange failed');
+      return NextResponse.redirect(redirectUrl);
     }
 
-    return NextResponse.json({
-      success: true,
-      tokens: tokens,
-    });
+    // Successful authentication - redirect back to app with tokens
+    const redirectUrl = new URL('/', request.url);
+    redirectUrl.searchParams.set('access_token', tokens.access_token);
+    if (tokens.refresh_token) {
+      redirectUrl.searchParams.set('refresh_token', tokens.refresh_token);
+    }
+    redirectUrl.searchParams.set('auth_success', 'true');
+    
+    return NextResponse.redirect(redirectUrl);
+    
   } catch (error) {
     console.error('Auth error:', error);
-    return NextResponse.json({
-      success: false,
-      error: error.message,
-    }, { status: 500 });
+    // Redirect back to app with error
+    const redirectUrl = new URL('/', request.url);
+    redirectUrl.searchParams.set('auth_error', error.message);
+    return NextResponse.redirect(redirectUrl);
   }
 } 

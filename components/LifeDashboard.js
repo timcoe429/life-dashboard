@@ -37,14 +37,42 @@ const LifeDashboard = () => {
       setAccessToken(savedToken);
     }
     
-    // Check if we're returning from OAuth
+    // Check if we're returning from OAuth via URL parameters
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    if (code) {
-      exchangeCodeForTokens(code);
+    const accessTokenFromUrl = params.get('access_token');
+    const refreshTokenFromUrl = params.get('refresh_token');
+    const authSuccess = params.get('auth_success');
+    const authError = params.get('auth_error');
+    
+    if (authError) {
+      console.error('Auth error from URL:', authError);
+      alert('Authentication failed: ' + authError);
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
+      return;
     }
+    
+    if (authSuccess && accessTokenFromUrl) {
+      console.log('Successfully received tokens from OAuth redirect');
+      setAccessToken(accessTokenFromUrl);
+      localStorage.setItem('google_access_token', accessTokenFromUrl);
+      
+      if (refreshTokenFromUrl) {
+        localStorage.setItem('google_refresh_token', refreshTokenFromUrl);
+      }
+      
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Show success message
+      alert('✅ Connected to Google Calendar! You can now use AI scheduling.');
+      
+      // Fetch calendar events
+      setTimeout(() => {
+        fetchCalendarEvents();
+      }, 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -180,35 +208,6 @@ const LifeDashboard = () => {
     } catch (error) {
       console.error('Auth error:', error);
       alert('Authentication failed. Please try again.');
-    }
-  };
-
-  const exchangeCodeForTokens = async (code) => {
-    try {
-      console.log('Exchanging code for tokens...');
-      const response = await fetch(`/api/auth/google?code=${code}`);
-      const result = await response.json();
-      
-      console.log('Token exchange result:', result);
-      
-      if (result.success && result.tokens.access_token) {
-        setAccessToken(result.tokens.access_token);
-        localStorage.setItem('google_access_token', result.tokens.access_token);
-        
-        // Store refresh token if available for future use
-        if (result.tokens.refresh_token) {
-          localStorage.setItem('google_refresh_token', result.tokens.refresh_token);
-        }
-        
-        await fetchCalendarEvents();
-        alert('✅ Connected to Google Calendar! You can now use AI scheduling.');
-      } else {
-        console.error('Token exchange failed:', result);
-        alert('Failed to connect to Google Calendar. Please try again.');
-      }
-    } catch (error) {
-      console.error('Token exchange error:', error);
-      alert('Connection failed. Please check console for details.');
     }
   };
 
