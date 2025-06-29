@@ -1,0 +1,12 @@
+# Rename this file to .env.local and fill in your actual API keys
+
+# Google Calendar API - Get from Google Cloud Console
+GOOGLE_CLIENT_ID=your_google_client_id_here
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google
+
+# OpenAI API - Get from OpenAI Dashboard  
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Next.js Secret - Generate a random string
+NEXTAUTH_SECRET=your_nextauth_secret_here 

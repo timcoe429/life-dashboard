@@ -18,12 +18,30 @@ const LifeDashboard = () => {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [completedToday, setCompletedToday] = useState(2);
+  const [accessToken, setAccessToken] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [lastAiResponse, setLastAiResponse] = useState(null);
+  const [calendarEvents, setCalendarEvents] = useState([]);
 
   // Update clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Load saved access token and fetch calendar events
+  useEffect(() => {
+    const savedToken = localStorage.getItem('google_access_token');
+    if (savedToken) {
+      setAccessToken(savedToken);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (accessToken) {
+      fetchCalendarEvents();
+    }
+  }, [accessToken]);
 
   // Timer logic
   useEffect(() => {
@@ -54,17 +72,158 @@ const LifeDashboard = () => {
     setTimerSeconds(0);
   };
 
-  const handleTaskSubmit = (e) => {
+  const handleTaskSubmit = async (e) => {
     e.preventDefault();
-    if (taskInput.trim()) {
+    if (!taskInput.trim()) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      if (!accessToken) {
+        // First, need to authenticate with Google
+        await authenticateWithGoogle();
+        return;
+      }
+
+      // Send to AI calendar system
+      const response = await fetch('/api/calendar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: taskInput,
+          accessToken: accessToken,
+          action: 'add'
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setLastAiResponse(result);
+        
+        // Add to local state for immediate feedback
+        const newTask = {
+          id: todayTasks.length + 1,
+          time: result.suggestedTime ? new Date(result.suggestedTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "Flexible",
+          title: result.aiAnalysis.title,
+          completed: false,
+          type: result.aiAnalysis.type,
+          priority: result.aiAnalysis.priority
+        };
+        
+        setTodayTasks([...todayTasks, newTask]);
+        setTaskInput("");
+        
+        // Refresh calendar events
+        await fetchCalendarEvents();
+        
+        // Show success message
+        alert(result.message);
+      } else {
+        console.error('AI Calendar Error:', result.error);
+        alert('Failed to process with AI. Adding as basic task.');
+        
+        // Fallback to basic task
+        const newTask = {
+          id: todayTasks.length + 1,
+          time: "Flexible",
+          title: taskInput,
+          completed: false
+        };
+        setTodayTasks([...todayTasks, newTask]);
+        setTaskInput("");
+      }
+    } catch (error) {
+      console.error('Task submission error:', error);
+      alert('Error processing request. Added as basic task.');
+      
+      // Fallback
       const newTask = {
         id: todayTasks.length + 1,
-        time: "Flexible",
+        time: "Flexible", 
         title: taskInput,
         completed: false
       };
       setTodayTasks([...todayTasks, newTask]);
       setTaskInput("");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const authenticateWithGoogle = async () => {
+    try {
+      const response = await fetch('/api/auth/google');
+      const { authUrl } = await response.json();
+      
+      // Open popup for authentication
+      const popup = window.open(authUrl, 'google-auth', 'width=500,height=600');
+      
+      // Listen for the popup to close with tokens
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          // Check if we got tokens (this would be more robust with postMessage)
+          const params = new URLSearchParams(window.location.search);
+          const code = params.get('code');
+          if (code) {
+            exchangeCodeForTokens(code);
+          }
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Auth error:', error);
+      alert('Authentication failed. Please try again.');
+    }
+  };
+
+  const exchangeCodeForTokens = async (code) => {
+    try {
+      const response = await fetch(`/api/auth/google?code=${code}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        setAccessToken(result.tokens.access_token);
+        localStorage.setItem('google_access_token', result.tokens.access_token);
+        await fetchCalendarEvents();
+        alert('✅ Connected to Google Calendar! You can now use AI scheduling.');
+      }
+    } catch (error) {
+      console.error('Token exchange error:', error);
+    }
+  };
+
+  const fetchCalendarEvents = async () => {
+    if (!accessToken) return;
+    
+    try {
+      const response = await fetch(`/api/calendar?accessToken=${accessToken}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        setCalendarEvents(result.events);
+        
+        // Merge calendar events with local tasks
+        const calendarTasks = result.events.map((event, index) => ({
+          id: `cal-${index}`,
+          time: new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          title: event.summary,
+          completed: false,
+          isCalendarEvent: true,
+          type: 'calendar',
+          eventId: event.id
+        }));
+        
+        // Update today's tasks to include calendar events
+        setTodayTasks(prev => {
+          const nonCalendarTasks = prev.filter(task => !task.isCalendarEvent);
+          return [...nonCalendarTasks, ...calendarTasks];
+        });
+      }
+    } catch (error) {
+      console.error('Fetch calendar error:', error);
     }
   };
 
@@ -202,20 +361,45 @@ const LifeDashboard = () => {
             </div>
             
             <div>
-              <input
-                type="text"
-                value={taskInput}
-                onChange={(e) => setTaskInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleTaskSubmit(e)}
-                placeholder="Add task..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              />
-              <button
-                onClick={handleTaskSubmit}
-                className="mt-2 w-full px-3 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
-              >
-                Add Task
-              </button>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={taskInput}
+                  onChange={(e) => setTaskInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleTaskSubmit(e)}
+                  placeholder={accessToken ? "Tell me what you need to do..." : "Connect Google Calendar first..."}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  disabled={isProcessing}
+                />
+                {isProcessing && (
+                  <div className="absolute right-3 top-2.5">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-top-transparent rounded-full"></div>
+                  </div>
+                )}
+              </div>
+              
+              {!accessToken ? (
+                <button
+                  onClick={authenticateWithGoogle}
+                  className="mt-2 w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                  🔗 Connect Google Calendar
+                </button>
+              ) : (
+                <button
+                  onClick={handleTaskSubmit}
+                  disabled={isProcessing}
+                  className="mt-2 w-full px-3 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
+                >
+                  {isProcessing ? '🤖 AI Processing...' : '🤖 AI Schedule'}
+                </button>
+              )}
+              
+              {lastAiResponse && (
+                <div className="mt-2 p-2 bg-green-50 rounded-lg">
+                  <p className="text-xs text-green-700">{lastAiResponse.message}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
