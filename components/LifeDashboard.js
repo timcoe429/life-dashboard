@@ -22,6 +22,7 @@ const LifeDashboard = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastAiResponse, setLastAiResponse] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Update clock
   useEffect(() => {
@@ -165,10 +166,17 @@ const LifeDashboard = () => {
   const authenticateWithGoogle = async () => {
     try {
       const response = await fetch('/api/auth/google');
-      const { authUrl } = await response.json();
+      const data = await response.json();
       
+      if (!data.authUrl) {
+        console.error('No auth URL received:', data);
+        alert('Authentication setup error. Please check console.');
+        return;
+      }
+      
+      console.log('Redirecting to:', data.authUrl);
       // Redirect directly instead of popup (more reliable)
-      window.location.href = authUrl;
+      window.location.href = data.authUrl;
     } catch (error) {
       console.error('Auth error:', error);
       alert('Authentication failed. Please try again.');
@@ -177,17 +185,30 @@ const LifeDashboard = () => {
 
   const exchangeCodeForTokens = async (code) => {
     try {
+      console.log('Exchanging code for tokens...');
       const response = await fetch(`/api/auth/google?code=${code}`);
       const result = await response.json();
       
-      if (result.success) {
+      console.log('Token exchange result:', result);
+      
+      if (result.success && result.tokens.access_token) {
         setAccessToken(result.tokens.access_token);
         localStorage.setItem('google_access_token', result.tokens.access_token);
+        
+        // Store refresh token if available for future use
+        if (result.tokens.refresh_token) {
+          localStorage.setItem('google_refresh_token', result.tokens.refresh_token);
+        }
+        
         await fetchCalendarEvents();
         alert('✅ Connected to Google Calendar! You can now use AI scheduling.');
+      } else {
+        console.error('Token exchange failed:', result);
+        alert('Failed to connect to Google Calendar. Please try again.');
       }
     } catch (error) {
       console.error('Token exchange error:', error);
+      alert('Connection failed. Please check console for details.');
     }
   };
 
@@ -195,8 +216,11 @@ const LifeDashboard = () => {
     if (!accessToken) return;
     
     try {
+      console.log('Fetching calendar events with token:', accessToken.substring(0, 20) + '...');
       const response = await fetch(`/api/calendar?accessToken=${accessToken}`);
       const result = await response.json();
+      
+      console.log('Calendar fetch result:', result);
       
       if (result.success) {
         setCalendarEvents(result.events);
@@ -217,10 +241,27 @@ const LifeDashboard = () => {
           const nonCalendarTasks = prev.filter(task => !task.isCalendarEvent);
           return [...nonCalendarTasks, ...calendarTasks];
         });
+      } else {
+        console.error('Calendar fetch failed:', result);
+        // If token is invalid, clear it
+        if (result.error && result.error.includes('invalid')) {
+          setAccessToken(null);
+          localStorage.removeItem('google_access_token');
+          localStorage.removeItem('google_refresh_token');
+        }
       }
     } catch (error) {
       console.error('Fetch calendar error:', error);
     }
+  };
+
+  const clearTokens = () => {
+    setAccessToken(null);
+    localStorage.removeItem('google_access_token');
+    localStorage.removeItem('google_refresh_token');
+    setCalendarEvents([]);
+    setTodayTasks(prev => prev.filter(task => !task.isCalendarEvent));
+    alert('Tokens cleared. You can now try reconnecting.');
   };
 
   const toggleTask = (id) => {
@@ -382,13 +423,43 @@ const LifeDashboard = () => {
                   🔗 Connect Google Calendar
                 </button>
               ) : (
-                <button
-                  onClick={handleTaskSubmit}
-                  disabled={isProcessing}
-                  className="mt-2 w-full px-3 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
-                >
-                  {isProcessing ? '🤖 AI Processing...' : '🤖 AI Schedule'}
-                </button>
+                <div>
+                  <button
+                    onClick={handleTaskSubmit}
+                    disabled={isProcessing}
+                    className="mt-2 w-full px-3 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  >
+                    {isProcessing ? '🤖 AI Processing...' : '🤖 AI Schedule'}
+                  </button>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-xs text-green-600">Connected</span>
+                    </div>
+                    <button
+                      onClick={() => setShowDebug(!showDebug)}
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      Debug
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {showDebug && (
+                <div className="mt-2 p-2 bg-gray-50 rounded-lg text-xs">
+                  <div className="space-y-1">
+                    <div>Status: {accessToken ? '✅ Connected' : '❌ Not Connected'}</div>
+                    <div>Token: {accessToken ? accessToken.substring(0, 20) + '...' : 'None'}</div>
+                    <div>Events: {calendarEvents.length}</div>
+                    <button
+                      onClick={clearTokens}
+                      className="mt-1 px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200"
+                    >
+                      Clear Tokens
+                    </button>
+                  </div>
+                </div>
               )}
               
               {lastAiResponse && (

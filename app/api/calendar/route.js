@@ -214,6 +214,15 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const accessToken = searchParams.get('accessToken');
     
+    console.log('Calendar GET request - Access token:', accessToken ? accessToken.substring(0, 20) + '...' : 'Missing');
+    
+    if (!accessToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No access token provided',
+      }, { status: 401 });
+    }
+    
     oauth2Client.setCredentials({
       access_token: accessToken,
     });
@@ -222,6 +231,8 @@ export async function GET(request) {
     
     const now = new Date();
     const endTime = addDays(now, 7);
+    
+    console.log('Fetching events from', now.toISOString(), 'to', endTime.toISOString());
     
     const events = await calendar.events.list({
       calendarId: 'primary',
@@ -232,6 +243,8 @@ export async function GET(request) {
       orderBy: 'startTime',
     });
 
+    console.log('Successfully fetched', events.data.items.length, 'events');
+
     return NextResponse.json({
       success: true,
       events: events.data.items,
@@ -239,9 +252,26 @@ export async function GET(request) {
     
   } catch (error) {
     console.error('Calendar fetch error:', error);
+    
+    // Handle specific Google API errors
+    if (error.code === 401) {
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid or expired access token',
+      }, { status: 401 });
+    }
+    
+    if (error.code === 403) {
+      return NextResponse.json({
+        success: false,
+        error: 'Calendar access denied - check permissions',
+      }, { status: 403 });
+    }
+    
     return NextResponse.json({
       success: false,
       error: error.message,
+      code: error.code || 'unknown',
     }, { status: 500 });
   }
 } 
