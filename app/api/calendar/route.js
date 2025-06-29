@@ -50,6 +50,19 @@ export async function POST(request) {
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
+    // Test the token first by trying to get user info
+    console.log('Testing Google Calendar access...');
+    try {
+      await calendar.calendarList.list({ maxResults: 1 });
+      console.log('Google Calendar access confirmed');
+    } catch (authError) {
+      console.error('Google Calendar auth test failed:', authError);
+      return NextResponse.json({
+        success: false,
+        error: 'Google Calendar authentication failed. Your access token has expired. Please reconnect your account.',
+      }, { status: 401 });
+    }
+
     // AI Processing - Analyze the natural language input
     console.log('Sending request to OpenAI...');
     let aiResponse;

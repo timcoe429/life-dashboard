@@ -87,4 +87,62 @@ export async function GET(request) {
     redirectUrl.searchParams.set('auth_error', error.message);
     return NextResponse.redirect(redirectUrl);
   }
+}
+
+// New POST endpoint for token refresh
+export async function POST(request) {
+  console.log('Token refresh request received');
+  
+  try {
+    const { refresh_token } = await request.json();
+    
+    if (!refresh_token) {
+      return NextResponse.json({
+        success: false,
+        error: 'Refresh token is required',
+      }, { status: 400 });
+    }
+    
+    console.log('Attempting to refresh token...');
+    
+    const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        refresh_token: refresh_token,
+        grant_type: 'refresh_token',
+      }),
+    });
+
+    const newTokens = await refreshResponse.json();
+    console.log('Token refresh response status:', refreshResponse.status);
+    
+    if (!newTokens.access_token) {
+      console.error('Token refresh failed:', newTokens);
+      return NextResponse.json({
+        success: false,
+        error: 'Token refresh failed: ' + (newTokens.error || 'Unknown error'),
+      }, { status: 401 });
+    }
+    
+    console.log('Token refreshed successfully');
+    
+    return NextResponse.json({
+      success: true,
+      access_token: newTokens.access_token,
+      // Note: Google usually doesn't send a new refresh token unless the old one expires
+      refresh_token: newTokens.refresh_token || refresh_token,
+    });
+    
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    return NextResponse.json({
+      success: false,
+      error: error.message,
+    }, { status: 500 });
+  }
 } 

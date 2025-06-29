@@ -210,6 +210,31 @@ const LifeDashboard = () => {
         console.error('AI Calendar Error:', result.error);
         console.error('Full error response:', result);
         
+        // Handle specific error cases
+        if (response.status === 401) {
+          // Token expired - try to refresh first
+          console.log('Access token expired, attempting refresh...');
+          const refreshed = await refreshAccessToken();
+          
+          if (refreshed) {
+            // Token refreshed successfully, retry the original request
+            console.log('Token refreshed, retrying original request...');
+            setIsProcessing(true);
+            return handleTaskSubmit(e); // Retry with new token
+          } else {
+            // Refresh failed - clear tokens and prompt reconnection
+            console.log('Token refresh failed, clearing tokens...');
+            setAccessToken(null);
+            localStorage.removeItem('google_access_token');
+            localStorage.removeItem('google_refresh_token');
+            setCalendarEvents([]);
+            setTodayTasks(prev => prev.filter(task => !task.isCalendarEvent));
+            
+            alert('🔄 Your Google Calendar connection has expired and could not be refreshed. Please reconnect to continue using AI scheduling.');
+            return;
+          }
+        }
+        
         // Show specific error instead of generic message
         const errorMsg = result.error || 'Unknown error occurred';
         alert(`AI Processing failed: ${errorMsg}\n\nCheck console for details.`);
@@ -287,11 +312,24 @@ const LifeDashboard = () => {
         });
       } else {
         console.error('Calendar fetch failed:', result);
-        // If token is invalid, clear it
-        if (result.error && result.error.includes('invalid')) {
-          setAccessToken(null);
-          localStorage.removeItem('google_access_token');
-          localStorage.removeItem('google_refresh_token');
+        // If token is invalid/expired, try to refresh first
+        if (response.status === 401) {
+          console.log('Calendar access token expired, attempting refresh...');
+          const refreshed = await refreshAccessToken();
+          
+          if (refreshed) {
+            // Token refreshed successfully, retry fetching calendar events
+            console.log('Token refreshed, retrying calendar fetch...');
+            return fetchCalendarEvents(); // Retry with new token
+          } else {
+            // Refresh failed - clear tokens
+            console.log('Token refresh failed, clearing tokens...');
+            setAccessToken(null);
+            localStorage.removeItem('google_access_token');
+            localStorage.removeItem('google_refresh_token');
+            setCalendarEvents([]);
+            setTodayTasks(prev => prev.filter(task => !task.isCalendarEvent));
+          }
         }
       }
     } catch (error) {
@@ -306,6 +344,49 @@ const LifeDashboard = () => {
     setCalendarEvents([]);
     setTodayTasks(prev => prev.filter(task => !task.isCalendarEvent));
     alert('Tokens cleared. You can now try reconnecting.');
+  };
+
+  const refreshAccessToken = async () => {
+    const refreshToken = localStorage.getItem('google_refresh_token');
+    
+    if (!refreshToken) {
+      console.log('No refresh token available, user needs to reconnect');
+      return false;
+    }
+    
+    try {
+      console.log('Attempting to refresh access token...');
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken,
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.access_token) {
+        console.log('Access token refreshed successfully');
+        setAccessToken(result.access_token);
+        localStorage.setItem('google_access_token', result.access_token);
+        
+        // Update refresh token if a new one was provided
+        if (result.refresh_token) {
+          localStorage.setItem('google_refresh_token', result.refresh_token);
+        }
+        
+        return true;
+      } else {
+        console.error('Token refresh failed:', result);
+        return false;
+      }
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      return false;
+    }
   };
 
   const toggleTask = (id) => {
