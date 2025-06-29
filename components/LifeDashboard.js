@@ -84,6 +84,42 @@ const LifeDashboard = () => {
     }
   }, [accessToken]);
 
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognitionInstance = new SpeechRecognition();
+        recognitionInstance.continuous = false;
+        recognitionInstance.interimResults = false;
+        recognitionInstance.lang = 'en-US';
+        
+        recognitionInstance.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          console.log('Speech recognized:', transcript);
+          setTaskInput(transcript);
+          setIsRecording(false);
+        };
+        
+        recognitionInstance.onerror = (event) => {
+          console.error('Speech recognition error:', event.error);
+          setIsRecording(false);
+          alert('Speech recognition failed: ' + event.error);
+        };
+        
+        recognitionInstance.onend = () => {
+          setIsRecording(false);
+        };
+        
+        setRecognition(recognitionInstance);
+        setSpeechSupported(true);
+      } else {
+        console.log('Speech recognition not supported');
+        setSpeechSupported(false);
+      }
+    }
+  }, []);
+
   // Timer logic
   useEffect(() => {
     let interval = null;
@@ -296,6 +332,21 @@ const LifeDashboard = () => {
 
   const completionRate = Math.round((completedToday / todayTasks.length) * 100) || 0;
 
+  const startVoiceRecording = () => {
+    if (recognition && !isRecording) {
+      setIsRecording(true);
+      setTaskInput(""); // Clear existing text
+      recognition.start();
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (recognition && isRecording) {
+      recognition.stop();
+      setIsRecording(false);
+    }
+  };
+
   return (
     <div className={`min-h-screen ${focusMode ? 'bg-gray-900' : 'bg-gray-50'} transition-all duration-500`}>
       <div className="container mx-auto px-6 py-6 max-w-6xl">
@@ -417,15 +468,36 @@ const LifeDashboard = () => {
                   onChange={(e) => setTaskInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleTaskSubmit(e)}
                   placeholder={accessToken ? "Tell me what you need to do..." : "Connect Google Calendar first..."}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  disabled={isProcessing}
+                  className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  disabled={isProcessing || isRecording}
                 />
+                {speechSupported && (
+                  <button
+                    onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                    className={`absolute right-2 top-2 p-1 rounded-full transition-all ${
+                      isRecording 
+                        ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                    disabled={isProcessing}
+                    title={isRecording ? 'Stop recording' : 'Start voice recording'}
+                  >
+                    {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                  </button>
+                )}
                 {isProcessing && (
-                  <div className="absolute right-3 top-2.5">
+                  <div className="absolute right-2 top-2.5">
                     <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-top-transparent rounded-full"></div>
                   </div>
                 )}
               </div>
+              
+              {isRecording && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span>Listening... Speak now!</span>
+                </div>
+              )}
               
               {!accessToken ? (
                 <button
