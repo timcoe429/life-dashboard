@@ -26,6 +26,7 @@ const LifeDashboard = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recognition, setRecognition] = useState(null);
   const [speechSupported, setSpeechSupported] = useState(false);
+  const [voiceProcessing, setVoiceProcessing] = useState(false);
 
   // Update clock
   useEffect(() => {
@@ -99,12 +100,27 @@ const LifeDashboard = () => {
           console.log('Speech recognized:', transcript);
           setTaskInput(transcript);
           setIsRecording(false);
+          setVoiceProcessing(true);
+          
+          // Auto-submit after a brief delay to let user see the transcription
+          setTimeout(() => {
+            if (accessToken && transcript.trim()) {
+              handleTaskSubmit({ preventDefault: () => {} });
+            }
+            setVoiceProcessing(false);
+          }, 1500);
         };
         
         recognitionInstance.onerror = (event) => {
           console.error('Speech recognition error:', event.error);
           setIsRecording(false);
-          alert('Speech recognition failed: ' + event.error);
+          if (event.error === 'no-speech') {
+            alert('No speech detected. Please try again.');
+          } else if (event.error === 'not-allowed') {
+            alert('Microphone access denied. Please allow microphone access and try again.');
+          } else {
+            alert('Speech recognition failed: ' + event.error);
+          }
         };
         
         recognitionInstance.onend = () => {
@@ -118,7 +134,7 @@ const LifeDashboard = () => {
         setSpeechSupported(false);
       }
     }
-  }, []);
+  }, [accessToken]);
 
   // Timer logic
   useEffect(() => {
@@ -467,11 +483,11 @@ const LifeDashboard = () => {
                   value={taskInput}
                   onChange={(e) => setTaskInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleTaskSubmit(e)}
-                  placeholder={accessToken ? "Tell me what you need to do..." : "Connect Google Calendar first..."}
+                  placeholder={accessToken ? (isRecording ? "Listening..." : "Tell me what you need to do...") : "Connect Google Calendar first..."}
                   className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   disabled={isProcessing || isRecording}
                 />
-                {speechSupported && (
+                {speechSupported && !isProcessing && (
                   <button
                     onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
                     className={`absolute right-2 top-2 p-1 rounded-full transition-all ${
@@ -479,7 +495,7 @@ const LifeDashboard = () => {
                         ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse' 
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
-                    disabled={isProcessing}
+                    disabled={!accessToken}
                     title={isRecording ? 'Stop recording' : 'Start voice recording'}
                   >
                     {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
@@ -496,6 +512,19 @@ const LifeDashboard = () => {
                 <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
                   <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                   <span>Listening... Speak now!</span>
+                </div>
+              )}
+              
+              {voiceProcessing && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span>Processing voice input...</span>
+                </div>
+              )}
+              
+              {!speechSupported && accessToken && (
+                <div className="mt-2 text-xs text-gray-500">
+                  💡 Voice input not supported in this browser. Try Chrome or Edge for voice features.
                 </div>
               )}
               
