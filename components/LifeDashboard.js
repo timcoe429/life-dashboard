@@ -355,7 +355,60 @@ const LifeDashboard = () => {
     }
   };
 
-  const fetchCalendarEvents = async () => {
+  const clearTokens = () => {
+    localStorage.removeItem('google_access_token');
+    localStorage.removeItem('google_refresh_token');
+    setAccessToken(null);
+    setCalendarEvents([]);
+    setTodayEvents([]);
+    console.log('Cleared all Google Calendar tokens');
+  };
+
+  const refreshAccessToken = async () => {
+    try {
+      const refreshToken = localStorage.getItem('google_refresh_token');
+      if (!refreshToken) {
+        console.log('No refresh token available');
+        clearTokens();
+        return false;
+      }
+
+      console.log('Attempting to refresh access token...');
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      const data = await response.json();
+      console.log('Refresh token response:', data);
+      
+      if (data.success && data.access_token) {
+        console.log('Successfully refreshed access token');
+        setAccessToken(data.access_token);
+        localStorage.setItem('google_access_token', data.access_token);
+        
+        // Update refresh token if provided
+        if (data.refresh_token) {
+          localStorage.setItem('google_refresh_token', data.refresh_token);
+        }
+        
+        return true;
+      } else {
+        throw new Error(data.error || 'Failed to refresh token');
+      }
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      clearTokens();
+      // Don't show alert immediately - let the user manually reconnect when they want to
+      console.log('Google Calendar connection expired. User will need to reconnect when they want to use calendar features.');
+      return false;
+    }
+  };
+
+  const fetchCalendarEvents = async (retryCount = 0) => {
     if (!accessToken) return;
     
     try {
@@ -394,6 +447,16 @@ const LifeDashboard = () => {
         setTodayEvents(todayEvents);
       } else {
         console.error('Calendar API failed:', result.error);
+        
+        // If token is expired and we haven't tried refreshing yet
+        if (result.error.includes('Invalid or expired') && retryCount === 0) {
+          console.log('Token expired, attempting to refresh...');
+          const refreshSuccess = await refreshAccessToken();
+          if (refreshSuccess) {
+            console.log('Token refreshed, retrying calendar fetch...');
+            return fetchCalendarEvents(1); // Retry once
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching calendar events:', error);
@@ -584,13 +647,22 @@ const LifeDashboard = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Today's Meetings</h3>
                 <div className="flex gap-2">
                   {accessToken && (
-                    <button
-                      onClick={fetchCalendarEvents}
-                      className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded hover:bg-gray-100"
-                      title="Refresh calendar"
-                    >
-                      ↻ Refresh
-                    </button>
+                    <>
+                      <button
+                        onClick={fetchCalendarEvents}
+                        className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded hover:bg-gray-100"
+                        title="Refresh calendar"
+                      >
+                        ↻ Refresh
+                      </button>
+                      <button
+                        onClick={clearTokens}
+                        className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded hover:bg-red-100"
+                        title="Disconnect calendar"
+                      >
+                        Disconnect
+                      </button>
+                    </>
                   )}
                   {!accessToken && (
                     <button
