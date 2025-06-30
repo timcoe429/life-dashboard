@@ -6,14 +6,7 @@ import { Calendar, CheckCircle2, Circle, Brain, ExternalLink, Plus, Mic, MicOff,
 const LifeDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [taskInput, setTaskInput] = useState("");
-  const [tasks, setTasks] = useState([
-    // Sample tasks showing AI auto-tagging in action - all fresh for today
-    { id: 1, text: "Review the new project specs for deadline", completed: false, energy: "high", tags: ["work", "urgent"], context: "office" },
-    { id: 2, text: "Call mom about weekend plans", completed: false, energy: "low", tags: ["personal"], context: "phone" },
-    { id: 3, text: "Brainstorm blog post ideas for content strategy", completed: false, energy: "creative", tags: ["content"], context: "anywhere" },
-    { id: 4, text: "Schedule dentist appointment", completed: false, energy: "low", tags: ["health"], context: "phone" },
-    { id: 5, text: "Plan workout routine for next week", completed: false, energy: "creative", tags: ["fitness"], context: "anywhere" },
-  ]);
+  const [tasks, setTasks] = useState([]);
   const [completedToday, setCompletedToday] = useState(0);
   const [accessToken, setAccessToken] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
@@ -43,7 +36,13 @@ const LifeDashboard = () => {
     
     const savedTasks = localStorage.getItem('dashboard_tasks');
     if (savedTasks) {
-      setTasks(JSON.parse(savedTasks));
+      const parsedTasks = JSON.parse(savedTasks);
+      // Filter out the old dummy "Order groceries online" task
+      const cleanTasks = parsedTasks.filter(task => task.text !== "Order groceries online" && task.text !== "Order groceries from amazon");
+      setTasks(cleanTasks);
+      if (cleanTasks.length !== parsedTasks.length) {
+        localStorage.setItem('dashboard_tasks', JSON.stringify(cleanTasks));
+      }
     }
     
     // Check OAuth callback
