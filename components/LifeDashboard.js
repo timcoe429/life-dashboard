@@ -486,22 +486,16 @@ const LifeDashboard = () => {
   };
 
   const clearCompletedTasks = () => {
-    const today = new Date().toDateString();
-    const cleanedTasks = tasks.filter(task => {
-      // Keep incomplete tasks and tasks completed today
-      return !task.completed || (task.completedAt && new Date(task.completedAt).toDateString() === today);
-    });
+    // Keep only incomplete tasks - clear ALL completed tasks
+    const cleanedTasks = tasks.filter(task => !task.completed);
     
     setTasks(cleanedTasks);
     localStorage.setItem('dashboard_tasks', JSON.stringify(cleanedTasks));
     
-    // Recount completed today
-    const completedTodayCount = cleanedTasks.filter(task => 
-      task.completed && task.completedAt && new Date(task.completedAt).toDateString() === today
-    ).length;
-    setCompletedToday(completedTodayCount);
+    // Reset completed count since we cleared all completed tasks
+    setCompletedToday(0);
     
-    console.log('Cleared old completed tasks');
+    console.log('Cleared all completed tasks');
   };
 
   const refreshAccessToken = async () => {
@@ -739,14 +733,14 @@ const LifeDashboard = () => {
                       <button
                         type="button"
                         onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                        className={`absolute right-3 top-3 p-2 rounded-full transition-all ${
+                        className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-all ${
                           isRecording 
                             ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                         title={isRecording ? "Click to stop recording (or wait 8 seconds)" : "Click to start voice recording"}
                       >
-                        {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+                        {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
                       </button>
                     )}
                   </div>
@@ -892,7 +886,7 @@ const LifeDashboard = () => {
                     <button
                       onClick={clearCompletedTasks}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                      title="Clear old completed tasks"
+                      title="Remove all completed tasks from the list"
                     >
                       <X size={12} className="inline mr-1" />
                       Clear Completed
