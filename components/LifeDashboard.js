@@ -267,36 +267,130 @@ const LifeDashboard = () => {
     return { energy, tags: [...new Set(tags)], context };
   };
 
-  const handleTaskSubmit = (e) => {
+  const handleTaskSubmit = async (e) => {
     e.preventDefault();
     if (!taskInput.trim()) return;
     
-    let text = taskInput.trim();
-    let manualTags = [];
+    const text = taskInput.trim();
     
-    // Still allow manual hashtags if user wants to override AI
-    const hashtagMatches = text.match(/#\w+/g);
-    if (hashtagMatches) {
-      manualTags = hashtagMatches.map(tag => tag.slice(1));
-      text = text.replace(/#\w+/g, '').trim();
+    // Check if this looks like a brain dump (longer input or multiple sentences)
+    const isBrainDump = text.length > 50 || text.split(/[.!?]+/).filter(s => s.trim()).length > 1;
+    
+    if (isBrainDump && !text.match(/#\w+/)) {
+      // Use AI to parse brain dump into multiple tasks
+      setVoiceProcessing(true);
+      try {
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ input: text }),
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Add all parsed tasks
+          data.tasks.forEach(taskData => {
+            addTask(taskData.text, taskData.energy, taskData.tags, taskData.context);
+          });
+          
+          // Show success message
+          alert(data.message);
+          setTaskInput("");
+        } else {
+          // Fallback to simple task creation
+          console.error('Brain dump parsing failed:', data.error);
+          const aiAnalysis = analyzeTaskWithAI(text);
+          addTask(text, aiAnalysis.energy, aiAnalysis.tags, aiAnalysis.context);
+          setTaskInput("");
+        }
+      } catch (error) {
+        // Fallback to simple task creation
+        console.error('Brain dump API error:', error);
+        const aiAnalysis = analyzeTaskWithAI(text);
+        addTask(text, aiAnalysis.energy, aiAnalysis.tags, aiAnalysis.context);
+        setTaskInput("");
+      } finally {
+        setVoiceProcessing(false);
+      }
+    } else {
+      // Simple single task creation (with manual hashtags support)
+      let cleanText = text;
+      let manualTags = [];
+      
+      // Still allow manual hashtags if user wants to override AI
+      const hashtagMatches = text.match(/#\w+/g);
+      if (hashtagMatches) {
+        manualTags = hashtagMatches.map(tag => tag.slice(1));
+        cleanText = text.replace(/#\w+/g, '').trim();
+      }
+      
+      // Use AI to analyze the task
+      const aiAnalysis = analyzeTaskWithAI(cleanText);
+      
+      // Combine AI tags with manual tags (manual takes priority)
+      const finalTags = [...new Set([...aiAnalysis.tags, ...manualTags])];
+      
+      addTask(cleanText, aiAnalysis.energy, finalTags, aiAnalysis.context);
+      setTaskInput("");
     }
-    
-    // Use AI to analyze the task
-    const aiAnalysis = analyzeTaskWithAI(text);
-    
-    // Combine AI tags with manual tags (manual takes priority)
-    const finalTags = [...new Set([...aiAnalysis.tags, ...manualTags])];
-    
-    addTask(text, aiAnalysis.energy, finalTags, aiAnalysis.context);
-    setTaskInput("");
   };
 
-  const handleBulkAdd = () => {
+  const handleBulkAdd = async () => {
     if (!bulkTasks.trim()) return;
     
-    const taskLines = bulkTasks.split('\n').filter(line => line.trim());
+    const text = bulkTasks.trim();
     
-    taskLines.forEach(line => {
+    // Check if this is a brain dump (free-form text) vs structured list
+    const lines = text.split('\n').filter(line => line.trim());
+    const isBrainDump = lines.length === 1 || text.includes(' and ') || text.includes(', ');
+    
+    if (isBrainDump && text.length > 50 && !text.match(/#\w+/)) {
+      // Use AI to parse brain dump into multiple tasks
+      setVoiceProcessing(true);
+      try {
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ input: text }),
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Add all parsed tasks
+          data.tasks.forEach(taskData => {
+            addTask(taskData.text, taskData.energy, taskData.tags, taskData.context);
+          });
+          
+          // Show success message
+          alert(data.message);
+          setBulkTasks("");
+          setQuickAddMode(false);
+        } else {
+          // Fallback to line-by-line processing
+          console.error('Brain dump parsing failed:', data.error);
+          processLinesIndividually(lines);
+        }
+      } catch (error) {
+        // Fallback to line-by-line processing
+        console.error('Brain dump API error:', error);
+        processLinesIndividually(lines);
+      } finally {
+        setVoiceProcessing(false);
+      }
+    } else {
+      // Process as individual lines
+      processLinesIndividually(lines);
+    }
+  };
+  
+  const processLinesIndividually = (lines) => {
+    lines.forEach(line => {
       let text = line.trim();
       let manualTags = [];
       
@@ -621,9 +715,9 @@ const LifeDashboard = () => {
                       type="text"
                       value={taskInput}
                       onChange={(e) => setTaskInput(e.target.value)}
-                      placeholder={isRecording ? "Listening... keep talking!" : "What's on your mind? (AI will auto-tag it!)"}
+                      placeholder={isRecording ? "Listening... keep talking!" : voiceProcessing ? "🧠 AI is breaking down your brain dump..." : "Brain dump everything on your mind! AI will create multiple tasks..."}
                       className="w-full px-4 py-3 pr-12 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                      disabled={isRecording}
+                      disabled={isRecording || voiceProcessing}
                     />
                     {speechSupported && (
                       <button
@@ -642,10 +736,10 @@ const LifeDashboard = () => {
                   
                   <button
                     type="submit"
-                    disabled={!taskInput.trim()}
+                    disabled={!taskInput.trim() || voiceProcessing}
                     className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                   >
-                    Add Task
+                    {voiceProcessing ? "🧠 AI Processing..." : "Add Task(s)"}
                   </button>
                 </form>
               ) : (
@@ -653,25 +747,27 @@ const LifeDashboard = () => {
                   <textarea
                     value={bulkTasks}
                     onChange={(e) => setBulkTasks(e.target.value)}
-                    placeholder="One task per line - AI auto-tags everything!&#10;Call mom about weekend plans&#10;Review project docs for deadline&#10;Brainstorm blog post ideas&#10;Buy groceries online"
+                    placeholder={voiceProcessing ? "🧠 AI is breaking down your brain dump..." : "Just dump your thoughts! AI will break it into multiple tasks...&#10;&#10;Example: 'I need to call mom about weekend plans and review the project docs for the deadline Friday and brainstorm some blog post ideas and also order groceries online'"}
                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm h-32 resize-none"
+                    disabled={voiceProcessing}
                   />
                   <button
                     onClick={handleBulkAdd}
-                    disabled={!bulkTasks.trim()}
+                    disabled={!bulkTasks.trim() || voiceProcessing}
                     className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium"
                   >
-                    Add All Tasks
+                    {voiceProcessing ? "🧠 AI Processing..." : "Parse Brain Dump"}
                   </button>
                 </div>
               )}
               
               <div className="mt-4 text-xs text-gray-500 space-y-1">
-                <p><strong>✨ AI Auto-Tags Everything!</strong></p>
-                <p>• Just type naturally - no hashtags needed</p>
-                <p>• "Call mom" → auto-tagged #personal</p>
-                <p>• "Project deadline" → auto-tagged #work #urgent</p>
-                <p>• Voice mode listens longer now!</p>
+                <p><strong>🧠 Smart Brain Dump Mode!</strong></p>
+                <p>• Just speak/type naturally - AI creates multiple tasks</p>
+                <p>• "I need to call mom and finish the project" → 2 separate tasks</p>
+                <p>• Auto-tags everything (#personal, #work, #urgent, etc.)</p>
+                <p>• Longer speech = smarter breakdown!</p>
+                <p>• Use bulk mode for really big brain dumps</p>
               </div>
             </div>
 
