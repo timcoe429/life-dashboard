@@ -11,11 +11,10 @@ const LifeDashboard = () => {
     { id: 1, text: "Review the new project specs for deadline", completed: false, energy: "high", tags: ["work", "urgent"], context: "office" },
     { id: 2, text: "Call mom about weekend plans", completed: false, energy: "low", tags: ["personal"], context: "phone" },
     { id: 3, text: "Brainstorm blog post ideas for content strategy", completed: false, energy: "creative", tags: ["content"], context: "anywhere" },
-    { id: 4, text: "Order groceries from amazon", completed: true, energy: "low", tags: ["shopping"], context: "computer" },
     { id: 5, text: "Schedule dentist appointment", completed: false, energy: "low", tags: ["health"], context: "phone" },
     { id: 6, text: "Plan workout routine for next week", completed: false, energy: "creative", tags: ["fitness"], context: "anywhere" },
   ]);
-  const [completedToday, setCompletedToday] = useState(1);
+  const [completedToday, setCompletedToday] = useState(0);
   const [accessToken, setAccessToken] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
@@ -62,16 +61,44 @@ const LifeDashboard = () => {
     }
   }, []);
 
-  // Save tasks whenever they change
+  // Save tasks whenever they change and handle daily reset
   useEffect(() => {
     localStorage.setItem('dashboard_tasks', JSON.stringify(tasks));
-    const completed = tasks.filter(task => task.completed).length;
-    setCompletedToday(completed);
+    
+    // Check if it's a new day and reset completed tasks
+    const today = new Date().toDateString();
+    const lastResetDate = localStorage.getItem('last_reset_date');
+    
+    if (lastResetDate !== today) {
+      // It's a new day! Reset all completed tasks and clear old ones
+      const resetTasks = tasks.map(task => 
+        task.completed ? { ...task, completed: false, completedAt: null } : task
+      );
+      
+      // Remove completed tasks older than today
+      const cleanedTasks = resetTasks.filter(task => 
+        !task.completedAt || new Date(task.completedAt).toDateString() === today
+      );
+      
+      if (tasks.length !== cleanedTasks.length || tasks.some((task, i) => task.completed !== cleanedTasks[i]?.completed)) {
+        setTasks(cleanedTasks);
+      }
+      
+      localStorage.setItem('last_reset_date', today);
+      setCompletedToday(0);
+    } else {
+      // Same day, count completed tasks
+      const completed = tasks.filter(task => task.completed).length;
+      setCompletedToday(completed);
+    }
   }, [tasks]);
 
   useEffect(() => {
     if (accessToken) {
       fetchCalendarEvents();
+      // Auto-refresh calendar every 5 minutes
+      const interval = setInterval(fetchCalendarEvents, 5 * 60 * 1000);
+      return () => clearInterval(interval);
     }
   }, [accessToken]);
 
@@ -329,21 +356,33 @@ const LifeDashboard = () => {
   };
 
   const fetchCalendarEvents = async () => {
+    if (!accessToken) return;
+    
     try {
+      console.log('Fetching calendar events...');
       const response = await fetch(`/api/calendar?accessToken=${encodeURIComponent(accessToken)}`);
       const result = await response.json();
       
+      console.log('Calendar API response:', result);
+      
       if (result.success) {
         setCalendarEvents(result.events);
+        console.log('Total events found:', result.events.length);
         
         // Filter for today only
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
         
+        console.log('Filtering events for today:', today.toDateString());
+        
         const todayEvents = result.events.filter(event => {
           const eventDate = new Date(event.start?.dateTime || event.start?.date);
-          return eventDate >= today && eventDate < tomorrow;
+          const isToday = eventDate >= today && eventDate < tomorrow;
+          if (isToday) {
+            console.log('Found today event:', event.summary, eventDate);
+          }
+          return isToday;
         }).map(event => ({
           id: event.id,
           title: event.summary || 'Untitled Event',
@@ -351,7 +390,10 @@ const LifeDashboard = () => {
           location: event.location
         }));
         
+        console.log('Today events after filtering:', todayEvents);
         setTodayEvents(todayEvents);
+      } else {
+        console.error('Calendar API failed:', result.error);
       }
     } catch (error) {
       console.error('Error fetching calendar events:', error);
@@ -422,7 +464,7 @@ const LifeDashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -455,18 +497,6 @@ const LifeDashboard = () => {
               <div>
                 <p className="text-2xl font-bold text-gray-900">{todayEvents.length}</p>
                 <p className="text-sm text-gray-500">Meetings today</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
-                <Brain size={20} className="text-orange-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{new Set(tasks.flatMap(task => task.tags)).size}</p>
-                <p className="text-sm text-gray-500">Active tags</p>
               </div>
             </div>
           </div>
@@ -552,14 +582,25 @@ const LifeDashboard = () => {
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Today's Meetings</h3>
-                {!accessToken && (
-                  <button
-                    onClick={authenticateWithGoogle}
-                    className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100"
-                  >
-                    Connect
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {accessToken && (
+                    <button
+                      onClick={fetchCalendarEvents}
+                      className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded hover:bg-gray-100"
+                      title="Refresh calendar"
+                    >
+                      ↻ Refresh
+                    </button>
+                  )}
+                  {!accessToken && (
+                    <button
+                      onClick={authenticateWithGoogle}
+                      className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100"
+                    >
+                      Connect
+                    </button>
+                  )}
+                </div>
               </div>
               
               <div className="space-y-3">
@@ -567,8 +608,13 @@ const LifeDashboard = () => {
                   <div className="text-center py-4">
                     <Calendar size={24} className="text-gray-400 mx-auto mb-2" />
                     <p className="text-gray-500 text-sm">
-                      {accessToken ? "No meetings today" : "Connect calendar to see meetings"}
+                      {accessToken ? "No meetings scheduled for today" : "Connect calendar to see meetings"}
                     </p>
+                    {accessToken && (
+                      <p className="text-gray-400 text-xs mt-1">
+                        Try refreshing if you expect to see meetings
+                      </p>
+                    )}
                   </div>
                 ) : (
                   todayEvents.map(event => (
