@@ -7,11 +7,13 @@ const LifeDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [taskInput, setTaskInput] = useState("");
   const [tasks, setTasks] = useState([
-    // Sample tasks to show the concept
-    { id: 1, text: "Review the new project specs", completed: false, energy: "high", tags: ["work", "urgent"], context: "office" },
-    { id: 2, text: "Call mom about weekend plans", completed: false, energy: "low", tags: ["personal"], context: "anywhere" },
-    { id: 3, text: "Brainstorm blog post ideas", completed: false, energy: "creative", tags: ["writing", "content"], context: "creative" },
-    { id: 4, text: "Order groceries online", completed: true, energy: "low", tags: ["personal", "errands"], context: "anywhere" },
+    // Sample tasks showing AI auto-tagging in action
+    { id: 1, text: "Review the new project specs for deadline", completed: false, energy: "high", tags: ["work", "urgent"], context: "office" },
+    { id: 2, text: "Call mom about weekend plans", completed: false, energy: "low", tags: ["personal"], context: "phone" },
+    { id: 3, text: "Brainstorm blog post ideas for content strategy", completed: false, energy: "creative", tags: ["content"], context: "anywhere" },
+    { id: 4, text: "Order groceries from amazon", completed: true, energy: "low", tags: ["shopping"], context: "computer" },
+    { id: 5, text: "Schedule dentist appointment", completed: false, energy: "low", tags: ["health"], context: "phone" },
+    { id: 6, text: "Plan workout routine for next week", completed: false, energy: "creative", tags: ["fitness"], context: "anywhere" },
   ]);
   const [completedToday, setCompletedToday] = useState(1);
   const [accessToken, setAccessToken] = useState(null);
@@ -147,33 +149,103 @@ const LifeDashboard = () => {
     setTasks(prev => [newTask, ...prev]);
   };
 
+  const analyzeTaskWithAI = (taskText) => {
+    // AI-powered task analysis - no manual tagging needed!
+    const text = taskText.toLowerCase();
+    let energy = "medium";
+    let tags = [];
+    let context = "anywhere";
+    
+    // Smart energy detection
+    if (/(urgent|asap|deadline|important|critical|rush|emergency|focus|deep work|concentrate)/i.test(text)) {
+      energy = "high";
+    } else if (/(creative|brainstorm|idea|design|write|plan|think|research|explore|invent)/i.test(text)) {
+      energy = "creative";
+    } else if (/(call|email|text|message|quick|easy|simple|order|buy|check|read)/i.test(text)) {
+      energy = "low";
+    }
+    
+    // Smart tag detection - no hashtags needed!
+    if (/(work|project|meeting|client|boss|colleague|office|business|proposal|report|presentation|deadline)/i.test(text)) {
+      tags.push("work");
+    }
+    
+    if (/(mom|dad|family|friend|personal|home|house|relationship|call|visit)/i.test(text)) {
+      tags.push("personal");
+    }
+    
+    if (/(doctor|appointment|health|medicine|pharmacy|dentist|checkup|hospital)/i.test(text)) {
+      tags.push("health");
+    }
+    
+    if (/(grocery|shop|buy|order|store|amazon|purchase|errands)/i.test(text)) {
+      tags.push("shopping");
+    }
+    
+    if (/(gym|workout|exercise|run|fitness|yoga|sports)/i.test(text)) {
+      tags.push("fitness");
+    }
+    
+    if (/(write|blog|content|article|post|social media|twitter|instagram)/i.test(text)) {
+      tags.push("content");
+    }
+    
+    if (/(learn|study|course|tutorial|read|book|skill|training)/i.test(text)) {
+      tags.push("learning");
+    }
+    
+    if (/(money|finance|budget|bank|bills|pay|tax|investment)/i.test(text)) {
+      tags.push("finance");
+    }
+    
+    if (/(travel|trip|vacation|flight|hotel|booking)/i.test(text)) {
+      tags.push("travel");
+    }
+    
+    if (/(clean|organize|declutter|tidy|chores|laundry|dishes)/i.test(text)) {
+      tags.push("household");
+    }
+    
+    // Urgency detection
+    if (/(today|now|asap|urgent|deadline|due)/i.test(text)) {
+      tags.push("urgent");
+    }
+    
+    // Context detection
+    if (/(home|house)/i.test(text)) {
+      context = "home";
+    } else if (/(office|work|desk)/i.test(text)) {
+      context = "office";
+    } else if (/(phone|call)/i.test(text)) {
+      context = "phone";
+    } else if (/(computer|online|email|website)/i.test(text)) {
+      context = "computer";
+    }
+    
+    return { energy, tags: [...new Set(tags)], context };
+  };
+
   const handleTaskSubmit = (e) => {
     e.preventDefault();
     if (!taskInput.trim()) return;
     
-    // Simple task parsing - look for energy indicators and tags
-    let energy = "medium";
-    let tags = [];
-    let context = "anywhere";
     let text = taskInput.trim();
+    let manualTags = [];
     
-    // Extract hashtags
+    // Still allow manual hashtags if user wants to override AI
     const hashtagMatches = text.match(/#\w+/g);
     if (hashtagMatches) {
-      tags = hashtagMatches.map(tag => tag.slice(1));
+      manualTags = hashtagMatches.map(tag => tag.slice(1));
       text = text.replace(/#\w+/g, '').trim();
     }
     
-    // Detect energy level from keywords
-    if (/(urgent|asap|important|focus|deep)/i.test(text)) {
-      energy = "high";
-    } else if (/(creative|brainstorm|idea|design|write)/i.test(text)) {
-      energy = "creative";
-    } else if (/(easy|quick|simple|call|email)/i.test(text)) {
-      energy = "low";
-    }
+    // Use AI to analyze the task
+    const aiAnalysis = analyzeTaskWithAI(text);
     
-    addTask(text, energy, tags, context);
+    // Combine AI tags with manual tags (manual takes priority)
+    const finalTags = [...new Set([...aiAnalysis.tags, ...manualTags])];
+    
+    addTask(text, aiAnalysis.energy, finalTags, aiAnalysis.context);
     setTaskInput("");
   };
 
@@ -183,23 +255,23 @@ const LifeDashboard = () => {
     const taskLines = bulkTasks.split('\n').filter(line => line.trim());
     
     taskLines.forEach(line => {
-      let energy = "medium";
-      let tags = [];
       let text = line.trim();
+      let manualTags = [];
       
-      // Extract hashtags
+      // Extract manual hashtags
       const hashtagMatches = text.match(/#\w+/g);
       if (hashtagMatches) {
-        tags = hashtagMatches.map(tag => tag.slice(1));
+        manualTags = hashtagMatches.map(tag => tag.slice(1));
         text = text.replace(/#\w+/g, '').trim();
       }
       
-      // Auto-detect energy
-      if (/(urgent|asap|important)/i.test(text)) energy = "high";
-      else if (/(creative|brainstorm|idea)/i.test(text)) energy = "creative";
-      else if (/(easy|quick|simple)/i.test(text)) energy = "low";
+      // Use AI to analyze each task
+      const aiAnalysis = analyzeTaskWithAI(text);
       
-      addTask(text, energy, tags);
+      // Combine AI tags with manual tags
+      const finalTags = [...new Set([...aiAnalysis.tags, ...manualTags])];
+      
+      addTask(text, aiAnalysis.energy, finalTags, aiAnalysis.context);
     });
     
     setBulkTasks("");
@@ -422,7 +494,7 @@ const LifeDashboard = () => {
                       type="text"
                       value={taskInput}
                       onChange={(e) => setTaskInput(e.target.value)}
-                      placeholder={isRecording ? "Listening... keep talking!" : "What's on your mind? #tag @context"}
+                      placeholder={isRecording ? "Listening... keep talking!" : "What's on your mind? (AI will auto-tag it!)"}
                       className="w-full px-4 py-3 pr-12 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       disabled={isRecording}
                     />
@@ -454,7 +526,7 @@ const LifeDashboard = () => {
                   <textarea
                     value={bulkTasks}
                     onChange={(e) => setBulkTasks(e.target.value)}
-                    placeholder="One task per line&#10;Call mom #personal&#10;Review docs #work urgent&#10;Brainstorm ideas #creative"
+                    placeholder="One task per line - AI auto-tags everything!&#10;Call mom about weekend plans&#10;Review project docs for deadline&#10;Brainstorm blog post ideas&#10;Buy groceries online"
                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm h-32 resize-none"
                   />
                   <button
@@ -468,9 +540,10 @@ const LifeDashboard = () => {
               )}
               
               <div className="mt-4 text-xs text-gray-500 space-y-1">
-                <p><strong>Tips:</strong></p>
-                <p>• Use #tags for organization</p>
-                <p>• Say "urgent" for high energy tasks</p>
+                <p><strong>✨ AI Auto-Tags Everything!</strong></p>
+                <p>• Just type naturally - no hashtags needed</p>
+                <p>• "Call mom" → auto-tagged #personal</p>
+                <p>• "Project deadline" → auto-tagged #work #urgent</p>
                 <p>• Voice mode listens longer now!</p>
               </div>
             </div>
