@@ -179,7 +179,7 @@ const LifeDashboard = () => {
     if (!taskText.trim()) return;
     
     const newTask = {
-      id: Date.now(),
+      id: Date.now() + Math.random(), // Ensure unique IDs even for rapid creation
       text: taskText.trim(),
       completed: false,
       energy: energy,
@@ -291,13 +291,18 @@ const LifeDashboard = () => {
         const data = await response.json();
         
         if (data.success) {
-          // Add all parsed tasks
-          data.tasks.forEach(taskData => {
-            addTask(taskData.text, taskData.energy, taskData.tags, taskData.context);
+          // Add all parsed tasks with a small delay for better UX
+          data.tasks.forEach((taskData, index) => {
+            setTimeout(() => {
+              addTask(taskData.text, taskData.energy, taskData.tags, taskData.context);
+            }, index * 100); // 100ms delay between each task
           });
           
-          // Show success message
-          alert(data.message);
+          // Show success message after all tasks are added
+          setTimeout(() => {
+            alert(data.message);
+          }, data.tasks.length * 100 + 200);
+          
           setTaskInput("");
         } else {
           // Fallback to simple task creation
@@ -361,17 +366,22 @@ const LifeDashboard = () => {
         
         const data = await response.json();
         
-        if (data.success) {
-          // Add all parsed tasks
-          data.tasks.forEach(taskData => {
-            addTask(taskData.text, taskData.energy, taskData.tags, taskData.context);
-          });
-          
-          // Show success message
-          alert(data.message);
-          setBulkTasks("");
-          setQuickAddMode(false);
-        } else {
+                 if (data.success) {
+           // Add all parsed tasks with a small delay for better UX
+           data.tasks.forEach((taskData, index) => {
+             setTimeout(() => {
+               addTask(taskData.text, taskData.energy, taskData.tags, taskData.context);
+             }, index * 100); // 100ms delay between each task
+           });
+           
+           // Show success message after all tasks are added
+           setTimeout(() => {
+             alert(data.message);
+           }, data.tasks.length * 100 + 200);
+           
+           setBulkTasks("");
+           setQuickAddMode(false);
+         } else {
           // Fallback to line-by-line processing
           console.error('Brain dump parsing failed:', data.error);
           processLinesIndividually(lines);
@@ -390,24 +400,26 @@ const LifeDashboard = () => {
   };
   
   const processLinesIndividually = (lines) => {
-    lines.forEach(line => {
-      let text = line.trim();
-      let manualTags = [];
-      
-      // Extract manual hashtags
-      const hashtagMatches = text.match(/#\w+/g);
-      if (hashtagMatches) {
-        manualTags = hashtagMatches.map(tag => tag.slice(1));
-        text = text.replace(/#\w+/g, '').trim();
-      }
-      
-      // Use AI to analyze each task
-      const aiAnalysis = analyzeTaskWithAI(text);
-      
-      // Combine AI tags with manual tags
-      const finalTags = [...new Set([...aiAnalysis.tags, ...manualTags])];
-      
-      addTask(text, aiAnalysis.energy, finalTags, aiAnalysis.context);
+    lines.forEach((line, index) => {
+      setTimeout(() => {
+        let text = line.trim();
+        let manualTags = [];
+        
+        // Extract manual hashtags
+        const hashtagMatches = text.match(/#\w+/g);
+        if (hashtagMatches) {
+          manualTags = hashtagMatches.map(tag => tag.slice(1));
+          text = text.replace(/#\w+/g, '').trim();
+        }
+        
+        // Use AI to analyze each task
+        const aiAnalysis = analyzeTaskWithAI(text);
+        
+        // Combine AI tags with manual tags
+        const finalTags = [...new Set([...aiAnalysis.tags, ...manualTags])];
+        
+        addTask(text, aiAnalysis.energy, finalTags, aiAnalysis.context);
+      }, index * 100); // 100ms delay between each task
     });
     
     setBulkTasks("");
