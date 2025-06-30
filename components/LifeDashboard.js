@@ -144,13 +144,13 @@ const LifeDashboard = () => {
           
           setTaskInput(finalTranscript + interimTranscript);
           
-          // Reset silence timer
+          // Reset silence timer with much longer timeout
           if (silenceTimer) clearTimeout(silenceTimer);
           silenceTimer = setTimeout(() => {
             if (finalTranscript.trim()) {
               recognitionInstance.stop();
             }
-          }, 3000); // 3 seconds of silence before stopping
+          }, 8000); // 8 seconds of silence before stopping - much more relaxed!
         };
         
         recognitionInstance.onend = () => {
@@ -727,21 +727,26 @@ const LifeDashboard = () => {
                       type="text"
                       value={taskInput}
                       onChange={(e) => setTaskInput(e.target.value)}
-                      placeholder={isRecording ? "Listening... keep talking!" : voiceProcessing ? "🧠 AI is breaking down your brain dump..." : "Brain dump everything on your mind! AI will create multiple tasks..."}
-                      className="w-full px-4 py-3 pr-12 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      placeholder={isRecording ? "🎤 LISTENING... Take your time! 8 seconds of silence to finish." : voiceProcessing ? "🧠 AI is breaking down your brain dump..." : "Brain dump everything on your mind! AI will create multiple tasks..."}
+                      className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm ${
+                        isRecording 
+                          ? 'border-red-300 bg-red-50 focus:ring-red-500' 
+                          : 'border-gray-200 focus:ring-blue-500'
+                      }`}
                       disabled={isRecording || voiceProcessing}
                     />
                     {speechSupported && (
                       <button
                         type="button"
                         onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                        className={`absolute right-3 top-3 p-1.5 rounded-full transition-all ${
+                        className={`absolute right-3 top-3 p-2 rounded-full transition-all ${
                           isRecording 
-                            ? 'bg-red-500 text-white animate-pulse' 
+                            ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
+                        title={isRecording ? "Click to stop recording (or wait 8 seconds)" : "Click to start voice recording"}
                       >
-                        {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                        {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
                       </button>
                     )}
                   </div>
@@ -778,7 +783,7 @@ const LifeDashboard = () => {
                 <p>• Just speak/type naturally - AI creates multiple tasks</p>
                 <p>• "I need to call mom and finish the project" → 2 separate tasks</p>
                 <p>• Auto-tags everything (#personal, #work, #urgent, etc.)</p>
-                <p>• Longer speech = smarter breakdown!</p>
+                <p>• 🎤 Voice records for 8 seconds of silence - take your time!</p>
                 <p>• Use bulk mode for really big brain dumps</p>
               </div>
             </div>
