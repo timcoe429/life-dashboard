@@ -7,12 +7,12 @@ const LifeDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [taskInput, setTaskInput] = useState("");
   const [tasks, setTasks] = useState([
-    // Sample tasks showing AI auto-tagging in action
+    // Sample tasks showing AI auto-tagging in action - all fresh for today
     { id: 1, text: "Review the new project specs for deadline", completed: false, energy: "high", tags: ["work", "urgent"], context: "office" },
     { id: 2, text: "Call mom about weekend plans", completed: false, energy: "low", tags: ["personal"], context: "phone" },
     { id: 3, text: "Brainstorm blog post ideas for content strategy", completed: false, energy: "creative", tags: ["content"], context: "anywhere" },
-    { id: 5, text: "Schedule dentist appointment", completed: false, energy: "low", tags: ["health"], context: "phone" },
-    { id: 6, text: "Plan workout routine for next week", completed: false, energy: "creative", tags: ["fitness"], context: "anywhere" },
+    { id: 4, text: "Schedule dentist appointment", completed: false, energy: "low", tags: ["health"], context: "phone" },
+    { id: 5, text: "Plan workout routine for next week", completed: false, energy: "creative", tags: ["fitness"], context: "anywhere" },
   ]);
   const [completedToday, setCompletedToday] = useState(0);
   const [accessToken, setAccessToken] = useState(null);
@@ -70,22 +70,38 @@ const LifeDashboard = () => {
     const lastResetDate = localStorage.getItem('last_reset_date');
     
     if (lastResetDate !== today) {
-      // It's a new day! Reset all completed tasks and clear old ones
-      const resetTasks = tasks.map(task => 
-        task.completed ? { ...task, completed: false, completedAt: null } : task
-      );
+      // It's a new day! Clean up completed tasks
+      console.log('New day detected, resetting completed tasks...');
       
-      // Remove completed tasks older than today
-      const cleanedTasks = resetTasks.filter(task => 
-        !task.completedAt || new Date(task.completedAt).toDateString() === today
-      );
+      const cleanedTasks = tasks.map(task => {
+        if (task.completed) {
+          // If task was completed yesterday or has no completion date, remove it completely if it's a sample/old task
+          if (!task.completedAt || new Date(task.completedAt).toDateString() !== today) {
+            // For old/sample tasks, just remove them entirely if completed
+            return null;
+          } else {
+            // If completed today, keep as completed
+            return task;
+          }
+        }
+        return task;
+      }).filter(Boolean); // Remove null entries
       
-      if (tasks.length !== cleanedTasks.length || tasks.some((task, i) => task.completed !== cleanedTasks[i]?.completed)) {
+      // Update tasks if anything changed
+      if (tasks.length !== cleanedTasks.length || JSON.stringify(tasks) !== JSON.stringify(cleanedTasks)) {
         setTasks(cleanedTasks);
+        localStorage.setItem('dashboard_tasks', JSON.stringify(cleanedTasks));
       }
       
       localStorage.setItem('last_reset_date', today);
-      setCompletedToday(0);
+      
+      // Count only tasks completed today
+      const completedTodayCount = cleanedTasks.filter(task => 
+        task.completed && task.completedAt && new Date(task.completedAt).toDateString() === today
+      ).length;
+      setCompletedToday(completedTodayCount);
+      
+      console.log('Daily reset complete. Cleaned tasks:', cleanedTasks.length, 'Completed today:', completedTodayCount);
     } else {
       // Same day, count completed tasks
       const completed = tasks.filter(task => task.completed).length;
@@ -362,6 +378,25 @@ const LifeDashboard = () => {
     setCalendarEvents([]);
     setTodayEvents([]);
     console.log('Cleared all Google Calendar tokens');
+  };
+
+  const clearCompletedTasks = () => {
+    const today = new Date().toDateString();
+    const cleanedTasks = tasks.filter(task => {
+      // Keep incomplete tasks and tasks completed today
+      return !task.completed || (task.completedAt && new Date(task.completedAt).toDateString() === today);
+    });
+    
+    setTasks(cleanedTasks);
+    localStorage.setItem('dashboard_tasks', JSON.stringify(cleanedTasks));
+    
+    // Recount completed today
+    const completedTodayCount = cleanedTasks.filter(task => 
+      task.completed && task.completedAt && new Date(task.completedAt).toDateString() === today
+    ).length;
+    setCompletedToday(completedTodayCount);
+    
+    console.log('Cleared old completed tasks');
   };
 
   const refreshAccessToken = async () => {
@@ -715,29 +750,42 @@ const LifeDashboard = () => {
               {/* Energy Filter */}
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-semibold text-gray-900">Your Tasks</h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">Energy:</span>
-                  <div className="flex gap-1">
-                    {[
-                      { key: 'all', label: 'All', icon: Circle },
-                      { key: 'high', label: 'High', icon: Zap },
-                      { key: 'creative', label: 'Creative', icon: Lightbulb },
-                      { key: 'low', label: 'Low', icon: Coffee },
-                    ].map(({ key, label, icon: Icon }) => (
-                      <button
-                        key={key}
-                        onClick={() => setSelectedEnergyFilter(key)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          selectedEnergyFilter === key
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        <Icon size={12} className="inline mr-1" />
-                        {label}
-                      </button>
-                    ))}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">Energy:</span>
+                    <div className="flex gap-1">
+                      {[
+                        { key: 'all', label: 'All', icon: Circle },
+                        { key: 'high', label: 'High', icon: Zap },
+                        { key: 'creative', label: 'Creative', icon: Lightbulb },
+                        { key: 'low', label: 'Low', icon: Coffee },
+                      ].map(({ key, label, icon: Icon }) => (
+                        <button
+                          key={key}
+                          onClick={() => setSelectedEnergyFilter(key)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            selectedEnergyFilter === key
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          <Icon size={12} className="inline mr-1" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                  
+                  {completedTasks.length > 0 && (
+                    <button
+                      onClick={clearCompletedTasks}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                      title="Clear old completed tasks"
+                    >
+                      <X size={12} className="inline mr-1" />
+                      Clear Completed
+                    </button>
+                  )}
                 </div>
               </div>
 
