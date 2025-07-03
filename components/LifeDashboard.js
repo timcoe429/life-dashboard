@@ -28,6 +28,12 @@ const LifeDashboard = () => {
   const [showProjectMode, setShowProjectMode] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [editingProject, setEditingProject] = useState(null);
+  
+  // AI Project Manager state
+  const [showProjectChat, setShowProjectChat] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatProcessing, setChatProcessing] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
 
   // Update clock
   useEffect(() => {
@@ -162,7 +168,9 @@ const LifeDashboard = () => {
           }
           
           // Update the appropriate input based on current mode
-          if (showProjectMode) {
+          if (showProjectChat) {
+            setChatInput(finalTranscript + interimTranscript);
+          } else if (showProjectMode) {
             setProjectInput(finalTranscript + interimTranscript);
           } else {
             setTaskInput(finalTranscript + interimTranscript);
@@ -181,7 +189,9 @@ const LifeDashboard = () => {
           setIsRecording(false);
           if (finalTranscript.trim()) {
             // Update the appropriate input based on current mode
-            if (showProjectMode) {
+            if (showProjectChat) {
+              setChatInput(finalTranscript.trim());
+            } else if (showProjectMode) {
               setProjectInput(finalTranscript.trim());
             } else {
               setTaskInput(finalTranscript.trim());
@@ -610,11 +620,127 @@ const LifeDashboard = () => {
     }
   };
 
+  // AI Project Manager functions
+  const handleProjectManagerChat = async (input, projectId = null) => {
+    if (!input.trim()) return;
+    
+    setChatProcessing(true);
+    
+    // Add user message to chat history
+    const userMessage = { type: 'user', content: input, timestamp: new Date() };
+    setChatHistory(prev => [...prev, userMessage]);
+    
+    try {
+      const response = await fetch('/api/project-manager', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: input,
+          projectId: projectId,
+          currentProjects: projects,
+          currentTasks: tasks
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Add AI response to chat history
+        const aiMessage = { 
+          type: 'ai', 
+          content: data.message || 'Request processed successfully',
+          data: data,
+          timestamp: new Date() 
+        };
+        setChatHistory(prev => [...prev, aiMessage]);
+        
+        // Handle different action types
+        if (data.action === 'create_project' && data.projects) {
+          data.projects.forEach((project, index) => {
+            setTimeout(() => {
+              addProject(project);
+            }, index * 100);
+          });
+        }
+        
+        if (data.action === 'update_project' && data.updates) {
+          handleProjectUpdate(data.projectId, data.updates);
+        }
+        
+        setChatInput("");
+      } else {
+        console.error('Project manager failed:', data.error);
+        const errorMessage = { 
+          type: 'ai', 
+          content: 'Sorry, I had trouble processing that request: ' + data.error,
+          timestamp: new Date() 
+        };
+        setChatHistory(prev => [...prev, errorMessage]);
+      }
+    } catch (error) {
+      console.error('Project manager API error:', error);
+      const errorMessage = { 
+        type: 'ai', 
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: new Date() 
+      };
+      setChatHistory(prev => [...prev, errorMessage]);
+    } finally {
+      setChatProcessing(false);
+    }
+  };
+
+  const handleProjectUpdate = (projectId, updates) => {
+    setProjects(prev => 
+      prev.map(project => {
+        if (project.id.toString() === projectId.toString()) {
+          let updatedProject = { ...project };
+          
+          // Apply updates
+          if (updates.title) updatedProject.title = updates.title;
+          if (updates.description) updatedProject.description = updates.description;
+          if (updates.status) updatedProject.status = updates.status;
+          
+          // Handle task updates
+          if (updates.addTasks) {
+            updates.addTasks.forEach(task => {
+              const taskWithProject = {
+                ...task,
+                projectId: updatedProject.id,
+                projectTitle: updatedProject.title
+              };
+              addTask(taskWithProject.text, taskWithProject.energy, taskWithProject.tags, taskWithProject.context);
+            });
+          }
+          
+          if (updates.removeTasks) {
+            updates.removeTasks.forEach(taskText => {
+              const taskToRemove = tasks.find(task => 
+                task.projectId === updatedProject.id && task.text.includes(taskText)
+              );
+              if (taskToRemove) {
+                deleteTask(taskToRemove.id);
+              }
+            });
+          }
+          
+          updatedProject.updatedAt = new Date().toISOString();
+          return updatedProject;
+        }
+        return project;
+      })
+    );
+  };
+
   const startVoiceRecording = () => {
     if (recognition && !isRecording) {
       setIsRecording(true);
       // Clear the appropriate input based on current mode
-      if (showProjectMode) {
+      if (showProjectChat) {
+        setChatInput("");
+      } else if (showProjectMode) {
         setProjectInput("");
       } else {
         setTaskInput("");
@@ -882,34 +1008,34 @@ const LifeDashboard = () => {
           <div className="lg:col-span-1 space-y-6">
             {/* Quick Add */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex gap-2">
+              <div className="flex items-center justify-center mb-6">
+                <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
                   <button
                     onClick={() => { setQuickAddMode(false); setShowProjectMode(false); }}
-                    className={`px-4 py-2 rounded-lg transition-colors font-medium ${
+                    className={`px-6 py-2 rounded-md transition-colors font-medium ${
                       !quickAddMode && !showProjectMode 
-                        ? 'bg-blue-100 text-blue-700' 
-                        : 'text-blue-600 hover:bg-blue-50'
+                        ? 'bg-white text-blue-700 shadow-sm' 
+                        : 'text-gray-600 hover:text-blue-600'
                     }`}
                   >
                     Tasks
                   </button>
                   <button
                     onClick={() => { setQuickAddMode(true); setShowProjectMode(false); }}
-                    className={`px-4 py-2 rounded-lg transition-colors font-medium ${
+                    className={`px-6 py-2 rounded-md transition-colors font-medium ${
                       quickAddMode && !showProjectMode 
-                        ? 'bg-blue-100 text-blue-700' 
-                        : 'text-blue-600 hover:bg-blue-50'
+                        ? 'bg-white text-blue-700 shadow-sm' 
+                        : 'text-gray-600 hover:text-blue-600'
                     }`}
                   >
                     Bulk Tasks
                   </button>
                   <button
                     onClick={() => { setShowProjectMode(true); setQuickAddMode(false); }}
-                    className={`px-4 py-2 rounded-lg transition-colors font-medium ${
+                    className={`px-6 py-2 rounded-md transition-colors font-medium ${
                       showProjectMode 
-                        ? 'bg-purple-100 text-purple-700' 
-                        : 'text-purple-600 hover:bg-purple-50'
+                        ? 'bg-white text-purple-700 shadow-sm' 
+                        : 'text-gray-600 hover:text-purple-600'
                     }`}
                   >
                     Projects
@@ -935,7 +1061,7 @@ const LifeDashboard = () => {
                       <button
                         type="button"
                         onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                        className={`absolute right-2 top-2 p-2 rounded-full transition-all ${
+                        className={`absolute right-4 top-3 p-2 rounded-full transition-all ${
                           isRecording 
                             ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1281,8 +1407,21 @@ const LifeDashboard = () => {
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-semibold text-gray-900">Your Projects</h3>
-                <div className="text-sm text-gray-500">
-                  {projects.length} project{projects.length !== 1 ? 's' : ''}
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setShowProjectChat(!showProjectChat)}
+                    className={`px-4 py-2 rounded-lg transition-colors font-medium ${
+                      showProjectChat 
+                        ? 'bg-purple-100 text-purple-700' 
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    <Brain size={16} className="inline mr-2" />
+                    AI Project Manager
+                  </button>
+                  <div className="text-sm text-gray-500">
+                    {projects.length} project{projects.length !== 1 ? 's' : ''}
+                  </div>
                 </div>
               </div>
               
@@ -1333,13 +1472,116 @@ const LifeDashboard = () => {
                       ))}
                     </div>
                     
+                    {project.phases && project.phases.length > 0 && (
+                      <div className="mb-3">
+                        <h5 className="text-xs font-medium text-gray-700 mb-1">Project Phases:</h5>
+                        <div className="space-y-1">
+                          {project.phases.map((phase, index) => (
+                            <div key={index} className="text-xs text-gray-600 flex items-center gap-1">
+                              <div className="w-4 h-1 bg-gradient-to-r from-purple-200 to-purple-400 rounded"></div>
+                              {phase}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="text-xs text-gray-500">
                       <p>{project.tasks?.length || 0} task{(project.tasks?.length || 0) !== 1 ? 's' : ''}</p>
                       <p>Created {new Date(project.createdAt).toLocaleDateString()}</p>
+                      {project.tasks && project.tasks.length > 0 && (
+                        <p className="mt-1">
+                          Est. {project.tasks.reduce((total, task) => total + (task.estimatedHours || 2), 0)} hours total
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
+              
+              {/* AI Project Manager Chat */}
+              {showProjectChat && (
+                <div className="mt-6 border-t border-gray-100 pt-6">
+                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <Brain size={20} className="text-purple-600" />
+                      AI Project Manager Chat
+                    </h4>
+                    
+                    {/* Chat History */}
+                    <div className="bg-white rounded-lg p-4 h-64 overflow-y-auto mb-4 border">
+                      {chatHistory.length === 0 ? (
+                        <div className="text-center text-gray-500 py-8">
+                          <Brain size={32} className="mx-auto mb-2 text-gray-400" />
+                          <p className="text-sm">Start a conversation with your AI Project Manager!</p>
+                          <p className="text-xs mt-1">Ask me to reorganize projects, add tasks, change priorities, or analyze dependencies.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {chatHistory.map((message, index) => (
+                            <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                                message.type === 'user' 
+                                  ? 'bg-blue-600 text-white' 
+                                  : 'bg-gray-100 text-gray-900'
+                              }`}>
+                                <p className="text-sm">{message.content}</p>
+                                <p className="text-xs opacity-70 mt-1">
+                                  {message.timestamp.toLocaleTimeString()}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Chat Input */}
+                    <div className="flex gap-3">
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && !chatProcessing && handleProjectManagerChat(chatInput)}
+                          placeholder={isRecording ? "🎤 LISTENING... Tell me what you want to change about your projects..." : chatProcessing ? "🧠 AI is thinking..." : "Ask me to reorganize projects, add tasks, change priorities..."}
+                          className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm ${
+                            isRecording 
+                              ? 'border-red-300 bg-red-50 focus:ring-red-500' 
+                              : 'border-gray-200 focus:ring-purple-500'
+                          }`}
+                          disabled={isRecording || chatProcessing}
+                        />
+                        {speechSupported && (
+                          <button
+                            type="button"
+                            onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                            className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-all ${
+                              isRecording 
+                                ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                            title={isRecording ? "Click to stop recording (or wait 8 seconds)" : "Click to start voice recording"}
+                          >
+                            {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleProjectManagerChat(chatInput)}
+                        disabled={!chatInput.trim() || chatProcessing}
+                        className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                      >
+                        {chatProcessing ? "🧠 Thinking..." : "Send"}
+                      </button>
+                    </div>
+                    
+                    <div className="mt-3 text-xs text-gray-600">
+                      <p><strong>Examples:</strong> "Reorganize my blog project tasks by priority" • "Add SEO optimization tasks to the blog project" • "Change the company blog project to high priority" • "What's the best order to complete my tasks?"</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

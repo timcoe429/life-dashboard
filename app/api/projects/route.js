@@ -38,7 +38,7 @@ export async function POST(request) {
 IMPORTANT RULES:
 1. Extract MULTIPLE distinct projects from the input if mentioned, or create one comprehensive project
 2. Each project should have a clear objective and outcome
-3. Break down each project into actionable tasks (3-8 tasks per project typically)
+3. Break down each project into actionable tasks (3-8 tasks per project typically) with PROPER SEQUENCING
 4. Remove filler words and conversational fluff
 5. Make project titles concise but descriptive (20-60 characters ideal)
 6. Auto-detect project status: "planning" (just started), "in-progress" (actively working), "review" (needs feedback), "completed" (default: "planning")
@@ -47,6 +47,8 @@ IMPORTANT RULES:
 9. Estimate timeline in days (be realistic: 1-7 days = small, 7-30 days = medium, 30+ days = large)
 10. If deadlines are mentioned, note them
 11. Create a brief description (1-2 sentences) explaining the project goal
+12. SEQUENCE TASKS LOGICALLY: Research/Planning → Setup/Infrastructure → Content/Development → Testing/Review → Launch/Deployment
+13. Add task dependencies and phases for better project management
 
 Return a JSON array of projects in this exact format:
 [
@@ -58,34 +60,57 @@ Return a JSON array of projects in this exact format:
     "tags": ["work", "marketing", "content"],
     "estimatedDays": 14,
     "deadline": null,
+    "phases": ["Research & Planning", "Setup & Development", "Content Creation", "Launch & Optimization"],
     "tasks": [
       {
         "text": "Research blog platform options",
         "energy": "medium",
         "tags": ["work", "research"],
         "context": "computer",
-        "priority": "high"
+        "priority": "high",
+        "phase": 1,
+        "dependsOn": [],
+        "estimatedHours": 3
+      },
+      {
+        "text": "Set up chosen blog platform",
+        "energy": "medium",
+        "tags": ["work", "technical"],
+        "context": "computer",
+        "priority": "high",
+        "phase": 2,
+        "dependsOn": ["Research blog platform options"],
+        "estimatedHours": 4
       },
       {
         "text": "Create content calendar for first month",
         "energy": "creative",
         "tags": ["work", "content"],
         "context": "computer",
-        "priority": "medium"
+        "priority": "medium",
+        "phase": 3,
+        "dependsOn": ["Set up chosen blog platform"],
+        "estimatedHours": 2
       },
       {
         "text": "Write first 3 blog posts",
         "energy": "creative",
         "tags": ["work", "content"],
         "context": "computer",
-        "priority": "medium"
+        "priority": "medium",
+        "phase": 3,
+        "dependsOn": ["Create content calendar for first month"],
+        "estimatedHours": 8
       },
       {
         "text": "Set up analytics and tracking",
         "energy": "medium",
         "tags": ["work", "technical"],
         "context": "computer",
-        "priority": "medium"
+        "priority": "medium",
+        "phase": 4,
+        "dependsOn": ["Write first 3 blog posts"],
+        "estimatedHours": 2
       }
     ]
   }
@@ -125,6 +150,7 @@ Be generous but realistic - break down complex ideas into manageable projects wi
         if (!project.priority) project.priority = 'medium';
         if (!project.tags) project.tags = [];
         if (!project.estimatedDays) project.estimatedDays = 7;
+        if (!project.phases) project.phases = ["Planning", "Implementation", "Review"];
         if (!project.tasks) project.tasks = [];
         
         // Validate tasks within each project
@@ -136,6 +162,9 @@ Be generous but realistic - break down complex ideas into manageable projects wi
           if (!task.tags) task.tags = [];
           if (!task.context) task.context = 'anywhere';
           if (!task.priority) task.priority = 'medium';
+          if (!task.phase) task.phase = 1;
+          if (!task.dependsOn) task.dependsOn = [];
+          if (!task.estimatedHours) task.estimatedHours = 2;
         });
       });
       
