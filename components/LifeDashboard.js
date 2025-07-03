@@ -161,7 +161,12 @@ const LifeDashboard = () => {
             }
           }
           
-          setTaskInput(finalTranscript + interimTranscript);
+          // Update the appropriate input based on current mode
+          if (showProjectMode) {
+            setProjectInput(finalTranscript + interimTranscript);
+          } else {
+            setTaskInput(finalTranscript + interimTranscript);
+          }
           
           // Reset silence timer with much longer timeout
           if (silenceTimer) clearTimeout(silenceTimer);
@@ -175,7 +180,12 @@ const LifeDashboard = () => {
         recognitionInstance.onend = () => {
           setIsRecording(false);
           if (finalTranscript.trim()) {
-            setTaskInput(finalTranscript.trim());
+            // Update the appropriate input based on current mode
+            if (showProjectMode) {
+              setProjectInput(finalTranscript.trim());
+            } else {
+              setTaskInput(finalTranscript.trim());
+            }
             finalTranscript = '';
           }
         };
@@ -603,7 +613,12 @@ const LifeDashboard = () => {
   const startVoiceRecording = () => {
     if (recognition && !isRecording) {
       setIsRecording(true);
-      setTaskInput(""); // Clear existing text
+      // Clear the appropriate input based on current mode
+      if (showProjectMode) {
+        setProjectInput("");
+      } else {
+        setTaskInput("");
+      }
       recognition.start();
     }
   };
@@ -867,12 +882,11 @@ const LifeDashboard = () => {
           <div className="lg:col-span-1 space-y-6">
             {/* Quick Add */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Brain Dump</h3>
+              <div className="flex items-center justify-between mb-6">
                 <div className="flex gap-2">
                   <button
                     onClick={() => { setQuickAddMode(false); setShowProjectMode(false); }}
-                    className={`text-sm px-3 py-1 rounded-lg transition-colors ${
+                    className={`px-4 py-2 rounded-lg transition-colors font-medium ${
                       !quickAddMode && !showProjectMode 
                         ? 'bg-blue-100 text-blue-700' 
                         : 'text-blue-600 hover:bg-blue-50'
@@ -882,17 +896,17 @@ const LifeDashboard = () => {
                   </button>
                   <button
                     onClick={() => { setQuickAddMode(true); setShowProjectMode(false); }}
-                    className={`text-sm px-3 py-1 rounded-lg transition-colors ${
+                    className={`px-4 py-2 rounded-lg transition-colors font-medium ${
                       quickAddMode && !showProjectMode 
                         ? 'bg-blue-100 text-blue-700' 
                         : 'text-blue-600 hover:bg-blue-50'
                     }`}
                   >
-                    Bulk
+                    Bulk Tasks
                   </button>
                   <button
                     onClick={() => { setShowProjectMode(true); setQuickAddMode(false); }}
-                    className={`text-sm px-3 py-1 rounded-lg transition-colors ${
+                    className={`px-4 py-2 rounded-lg transition-colors font-medium ${
                       showProjectMode 
                         ? 'bg-purple-100 text-purple-700' 
                         : 'text-purple-600 hover:bg-purple-50'
@@ -905,13 +919,33 @@ const LifeDashboard = () => {
               
               {showProjectMode ? (
                 <form onSubmit={handleProjectSubmit} className="space-y-3">
-                  <textarea
-                    value={projectInput}
-                    onChange={(e) => setProjectInput(e.target.value)}
-                    placeholder={projectProcessing ? "🧠 AI is creating your project..." : "Describe your project idea! AI will break it into a project with tasks...&#10;&#10;Example: 'I want to launch a company blog to improve our content marketing. Need to research platforms, create a content calendar, write some initial posts, and set up analytics.'"}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm h-32 resize-none"
-                    disabled={projectProcessing}
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={projectInput}
+                      onChange={(e) => setProjectInput(e.target.value)}
+                      placeholder={isRecording ? "🎤 LISTENING... Describe your project idea! Take your time - 8 seconds of silence to finish." : projectProcessing ? "🧠 AI is creating your project..." : "Describe your project idea! AI will break it into a project with tasks...&#10;&#10;Example: 'I want to launch a company blog to improve our content marketing. Need to research platforms, create a content calendar, write some initial posts, and set up analytics.'"}
+                      className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm h-32 resize-none ${
+                        isRecording 
+                          ? 'border-red-300 bg-red-50 focus:ring-red-500' 
+                          : 'border-gray-200 focus:ring-purple-500'
+                      }`}
+                      disabled={isRecording || projectProcessing}
+                    />
+                    {speechSupported && (
+                      <button
+                        type="button"
+                        onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                        className={`absolute right-2 top-2 p-2 rounded-full transition-all ${
+                          isRecording 
+                            ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                        title={isRecording ? "Click to stop recording (or wait 8 seconds)" : "Click to start voice recording"}
+                      >
+                        {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                      </button>
+                    )}
+                  </div>
                   <button
                     type="submit"
                     disabled={!projectInput.trim() || projectProcessing}
@@ -979,13 +1013,14 @@ const LifeDashboard = () => {
               )}
               
               <div className="mt-4 text-xs text-gray-500 space-y-1">
-                <p><strong>🧠 Smart Brain Dump Mode!</strong></p>
+                <p><strong>🧠 Smart AI Mode!</strong></p>
                 {showProjectMode ? (
                   <>
                     <p>• Describe your project idea - AI creates structured project with tasks</p>
                     <p>• "Launch a blog" → Project with research, content, setup tasks</p>
                     <p>• Auto-estimates timeline and sets priorities</p>
                     <p>• Project tasks are automatically added to your task list</p>
+                    <p>• 🎤 Voice records for 8 seconds of silence - take your time!</p>
                   </>
                 ) : (
                   <>
