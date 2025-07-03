@@ -20,6 +20,14 @@ const LifeDashboard = () => {
   const [quickAddMode, setQuickAddMode] = useState(false);
   const [bulkTasks, setBulkTasks] = useState("");
   const [editingTask, setEditingTask] = useState(null);
+  
+  // Project-related state
+  const [projects, setProjects] = useState([]);
+  const [projectInput, setProjectInput] = useState("");
+  const [projectProcessing, setProjectProcessing] = useState(false);
+  const [showProjectMode, setShowProjectMode] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [editingProject, setEditingProject] = useState(null);
 
   // Update clock
   useEffect(() => {
@@ -27,7 +35,7 @@ const LifeDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Load saved access token and tasks
+  // Load saved access token, tasks, and projects
   useEffect(() => {
     const savedToken = localStorage.getItem('google_access_token');
     if (savedToken) {
@@ -43,6 +51,12 @@ const LifeDashboard = () => {
       if (cleanTasks.length !== parsedTasks.length) {
         localStorage.setItem('dashboard_tasks', JSON.stringify(cleanTasks));
       }
+    }
+    
+    const savedProjects = localStorage.getItem('dashboard_projects');
+    if (savedProjects) {
+      const parsedProjects = JSON.parse(savedProjects);
+      setProjects(parsedProjects);
     }
     
     // Check OAuth callback
@@ -107,6 +121,11 @@ const LifeDashboard = () => {
       setCompletedToday(completed);
     }
   }, [tasks]);
+
+  // Save projects whenever they change
+  useEffect(() => {
+    localStorage.setItem('dashboard_projects', JSON.stringify(projects));
+  }, [projects]);
 
   useEffect(() => {
     if (accessToken) {
@@ -272,6 +291,34 @@ const LifeDashboard = () => {
     if (!taskInput.trim()) return;
     
     const text = taskInput.trim();
+    
+    // Check if this looks like a project (complex multi-step description)
+    const isProject = text.length > 80 && (
+      text.includes('project') || 
+      text.includes('launch') || 
+      text.includes('build') || 
+      text.includes('create') ||
+      text.includes('develop') ||
+      text.includes('implement') ||
+      text.includes('organize') ||
+      text.includes('plan') ||
+      (text.split(/[.!?]+/).filter(s => s.trim()).length > 2)
+    );
+    
+    if (isProject && !text.match(/#\w+/)) {
+      // Suggest creating a project instead
+      const shouldCreateProject = confirm(
+        `This sounds like a project! Would you like to create a project instead?\n\n` +
+        `Click "OK" to create a project with organized tasks, or "Cancel" to create individual tasks.`
+      );
+      
+      if (shouldCreateProject) {
+        setProjectInput(text);
+        setShowProjectMode(true);
+        setTaskInput("");
+        return;
+      }
+    }
     
     // Check if this looks like a brain dump (longer input or multiple sentences)
     const isBrainDump = text.length > 50 || text.split(/[.!?]+/).filter(s => s.trim()).length > 1;
@@ -447,6 +494,110 @@ const LifeDashboard = () => {
       )
     );
     setEditingTask(null);
+  };
+
+  // Project management functions
+  const addProject = (project) => {
+    if (!project.title?.trim()) return;
+    
+    const newProject = {
+      id: Date.now() + Math.random(),
+      ...project,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    setProjects(prev => [newProject, ...prev]);
+    
+    // Also add the project tasks to the main tasks list
+    if (project.tasks && project.tasks.length > 0) {
+      project.tasks.forEach((task, index) => {
+        setTimeout(() => {
+          const taskWithProject = {
+            ...task,
+            projectId: newProject.id,
+            projectTitle: newProject.title
+          };
+          addTask(taskWithProject.text, taskWithProject.energy, taskWithProject.tags, taskWithProject.context);
+        }, index * 50);
+      });
+    }
+  };
+
+  const updateProject = (id, updates) => {
+    setProjects(prev => 
+      prev.map(project => 
+        project.id === id ? { ...project, ...updates, updatedAt: new Date().toISOString() } : project
+      )
+    );
+    setEditingProject(null);
+  };
+
+  const deleteProject = (id) => {
+    setProjects(prev => prev.filter(project => project.id !== id));
+    // Also remove tasks associated with this project
+    setTasks(prev => prev.filter(task => task.projectId !== id));
+  };
+
+  const handleProjectSubmit = async (e) => {
+    e.preventDefault();
+    if (!projectInput.trim()) return;
+    
+    setProjectProcessing(true);
+    try {
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ input: projectInput }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Add all parsed projects
+        data.projects.forEach((project, index) => {
+          setTimeout(() => {
+            addProject(project);
+          }, index * 100);
+        });
+        
+        // Show success message
+        setTimeout(() => {
+          alert(data.message);
+        }, data.projects.length * 100 + 200);
+        
+        setProjectInput("");
+      } else {
+        console.error('Project parsing failed:', data.error);
+        alert('Failed to create project: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Project API error:', error);
+      alert('Failed to create project. Please try again.');
+    } finally {
+      setProjectProcessing(false);
+    }
+  };
+
+  const getProjectStatusColor = (status) => {
+    switch (status) {
+      case 'completed': return 'bg-green-50 border-green-200 text-green-700';
+      case 'in-progress': return 'bg-blue-50 border-blue-200 text-blue-700';
+      case 'review': return 'bg-yellow-50 border-yellow-200 text-yellow-700';
+      case 'planning': return 'bg-gray-50 border-gray-200 text-gray-700';
+      default: return 'bg-gray-50 border-gray-200 text-gray-700';
+    }
+  };
+
+  const getProjectPriorityColor = (priority) => {
+    switch (priority) {
+      case 'high': return 'bg-red-50 border-red-200 text-red-700';
+      case 'medium': return 'bg-yellow-50 border-yellow-200 text-yellow-700';
+      case 'low': return 'bg-green-50 border-green-200 text-green-700';
+      default: return 'bg-gray-50 border-gray-200 text-gray-700';
+    }
   };
 
   const startVoiceRecording = () => {
@@ -661,7 +812,7 @@ const LifeDashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -689,7 +840,19 @@ const LifeDashboard = () => {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-                <Calendar size={20} className="text-purple-500" />
+                <Brain size={20} className="text-purple-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{projects.length}</p>
+                <p className="text-sm text-gray-500">Active projects</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
+                <Calendar size={20} className="text-orange-500" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900">{todayEvents.length}</p>
@@ -706,15 +869,58 @@ const LifeDashboard = () => {
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Brain Dump</h3>
-                <button
-                  onClick={() => setQuickAddMode(!quickAddMode)}
-                  className="text-sm text-blue-600 hover:text-blue-700"
-                >
-                  {quickAddMode ? 'Single' : 'Bulk'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setQuickAddMode(false); setShowProjectMode(false); }}
+                    className={`text-sm px-3 py-1 rounded-lg transition-colors ${
+                      !quickAddMode && !showProjectMode 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'text-blue-600 hover:bg-blue-50'
+                    }`}
+                  >
+                    Tasks
+                  </button>
+                  <button
+                    onClick={() => { setQuickAddMode(true); setShowProjectMode(false); }}
+                    className={`text-sm px-3 py-1 rounded-lg transition-colors ${
+                      quickAddMode && !showProjectMode 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'text-blue-600 hover:bg-blue-50'
+                    }`}
+                  >
+                    Bulk
+                  </button>
+                  <button
+                    onClick={() => { setShowProjectMode(true); setQuickAddMode(false); }}
+                    className={`text-sm px-3 py-1 rounded-lg transition-colors ${
+                      showProjectMode 
+                        ? 'bg-purple-100 text-purple-700' 
+                        : 'text-purple-600 hover:bg-purple-50'
+                    }`}
+                  >
+                    Projects
+                  </button>
+                </div>
               </div>
               
-              {!quickAddMode ? (
+              {showProjectMode ? (
+                <form onSubmit={handleProjectSubmit} className="space-y-3">
+                  <textarea
+                    value={projectInput}
+                    onChange={(e) => setProjectInput(e.target.value)}
+                    placeholder={projectProcessing ? "🧠 AI is creating your project..." : "Describe your project idea! AI will break it into a project with tasks...&#10;&#10;Example: 'I want to launch a company blog to improve our content marketing. Need to research platforms, create a content calendar, write some initial posts, and set up analytics.'"}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm h-32 resize-none"
+                    disabled={projectProcessing}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!projectInput.trim() || projectProcessing}
+                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  >
+                    {projectProcessing ? "🧠 AI Creating Project..." : "Create Project"}
+                  </button>
+                </form>
+              ) : !quickAddMode ? (
                 <form onSubmit={handleTaskSubmit} className="space-y-3">
                   <div className="relative">
                     <input
@@ -774,11 +980,22 @@ const LifeDashboard = () => {
               
               <div className="mt-4 text-xs text-gray-500 space-y-1">
                 <p><strong>🧠 Smart Brain Dump Mode!</strong></p>
-                <p>• Just speak/type naturally - AI creates multiple tasks</p>
-                <p>• "I need to call mom and finish the project" → 2 separate tasks</p>
-                <p>• Auto-tags everything (#personal, #work, #urgent, etc.)</p>
-                <p>• 🎤 Voice records for 8 seconds of silence - take your time!</p>
-                <p>• Use bulk mode for really big brain dumps</p>
+                {showProjectMode ? (
+                  <>
+                    <p>• Describe your project idea - AI creates structured project with tasks</p>
+                    <p>• "Launch a blog" → Project with research, content, setup tasks</p>
+                    <p>• Auto-estimates timeline and sets priorities</p>
+                    <p>• Project tasks are automatically added to your task list</p>
+                  </>
+                ) : (
+                  <>
+                    <p>• Just speak/type naturally - AI creates multiple tasks</p>
+                    <p>• "I need to call mom and finish the project" → 2 separate tasks</p>
+                    <p>• Auto-tags everything (#personal, #work, #urgent, etc.)</p>
+                    <p>• 🎤 Voice records for 8 seconds of silence - take your time!</p>
+                    <p>• Use bulk mode for really big brain dumps</p>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1022,6 +1239,75 @@ const LifeDashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Projects Section */}
+        {projects.length > 0 && (
+          <div className="mt-6">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">Your Projects</h3>
+                <div className="text-sm text-gray-500">
+                  {projects.length} project{projects.length !== 1 ? 's' : ''}
+                </div>
+              </div>
+              
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {projects.map(project => (
+                  <div key={project.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-3">
+                      <h4 className="text-lg font-medium text-gray-900 flex-1">{project.title}</h4>
+                      <div className="flex gap-1 ml-2">
+                        <button
+                          onClick={() => setEditingProject(editingProject === project.id ? null : project.id)}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 rounded"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          onClick={() => deleteProject(project.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <p className="text-sm text-gray-600 mb-3">{project.description}</p>
+                    
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${getProjectStatusColor(project.status)}`}>
+                        {project.status}
+                      </span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${getProjectPriorityColor(project.priority)}`}>
+                        {project.priority}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {project.estimatedDays} days
+                      </span>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {project.tags.map(tag => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
+                        >
+                          <Hash size={10} />
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    
+                    <div className="text-xs text-gray-500">
+                      <p>{project.tasks?.length || 0} task{(project.tasks?.length || 0) !== 1 ? 's' : ''}</p>
+                      <p>Created {new Date(project.createdAt).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Links */}
         <div className="mt-8 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
