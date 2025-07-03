@@ -34,6 +34,10 @@ const LifeDashboard = () => {
   const [chatInput, setChatInput] = useState("");
   const [chatProcessing, setChatProcessing] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  
+  // Unified smart input
+  const [smartInput, setSmartInput] = useState('');
+  const [smartProcessing, setSmartProcessing] = useState(false);
 
   // Update clock
   useEffect(() => {
@@ -142,7 +146,7 @@ const LifeDashboard = () => {
     }
   }, [accessToken]);
 
-  // Initialize speech recognition with longer listening time
+  // Initialize speech recognition with shorter listening time
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -167,37 +171,79 @@ const LifeDashboard = () => {
             }
           }
           
+          const currentText = finalTranscript + interimTranscript;
+          console.log('Speech recognition result:', currentText);
+          
+          // Use a function to get current mode dynamically
+          const getCurrentMode = () => {
+            // Check DOM elements to determine current mode since state might be stale
+            const projectChatVisible = document.querySelector('[data-project-chat="true"]') !== null;
+            
+            console.log('DOM check - projectChatVisible:', projectChatVisible);
+            
+            if (projectChatVisible) {
+              return 'chat';
+            } else {
+              return 'smart';
+            }
+          };
+          
+          const currentMode = getCurrentMode();
+          console.log('Current mode detected:', currentMode);
+          
           // Update the appropriate input based on current mode
-          if (showProjectChat) {
-            setChatInput(finalTranscript + interimTranscript);
-          } else if (showProjectMode) {
-            setProjectInput(finalTranscript + interimTranscript);
+          if (currentMode === 'chat') {
+            console.log('Updating chat input');
+            setChatInput(currentText);
           } else {
-            setTaskInput(finalTranscript + interimTranscript);
+            console.log('Updating smart input');
+            setSmartInput(currentText);
           }
           
-          // Reset silence timer with much longer timeout
+          // Reset silence timer with shorter timeout
           if (silenceTimer) clearTimeout(silenceTimer);
           silenceTimer = setTimeout(() => {
             if (finalTranscript.trim()) {
+              console.log('Auto-stopping due to silence');
               recognitionInstance.stop();
             }
-          }, 8000); // 8 seconds of silence before stopping - much more relaxed!
+          }, 3000); // 3 seconds of silence before stopping
         };
         
         recognitionInstance.onend = () => {
+          console.log('Speech recognition ended. Final transcript:', finalTranscript);
           setIsRecording(false);
           if (finalTranscript.trim()) {
-            // Update the appropriate input based on current mode
-            if (showProjectChat) {
+            // Use the same dynamic mode detection
+            const getCurrentMode = () => {
+              const projectChatVisible = document.querySelector('[data-project-chat="true"]') !== null;
+              const projectModeVisible = document.querySelector('[data-project-mode="true"]') !== null;
+              
+              if (projectChatVisible) {
+                return 'chat';
+              } else if (projectModeVisible) {
+                return 'project';
+              } else {
+                return 'task';
+              }
+            };
+            
+            const currentMode = getCurrentMode();
+            console.log('Saving final transcript to mode:', currentMode);
+            
+            if (currentMode === 'chat') {
+              console.log('Saving to chat input');
               setChatInput(finalTranscript.trim());
-            } else if (showProjectMode) {
+            } else if (currentMode === 'project') {
+              console.log('Saving to project input');
               setProjectInput(finalTranscript.trim());
             } else {
+              console.log('Saving to task input');
               setTaskInput(finalTranscript.trim());
             }
-            finalTranscript = '';
           }
+          finalTranscript = '';
+          if (silenceTimer) clearTimeout(silenceTimer);
         };
         
         recognitionInstance.onerror = (event) => {
@@ -601,6 +647,111 @@ const LifeDashboard = () => {
     }
   };
 
+  // Smart unified handler that detects if input is a project or tasks
+  const handleSmartAdd = async () => {
+    if (!smartInput.trim()) return;
+    
+    const text = smartInput.trim();
+    
+    // AI detection logic - decide if this is a project or tasks
+    const isProjectIndicator = (
+      text.length > 100 || // Long descriptions are usually projects
+      text.includes('project') || 
+      text.includes('launch') || 
+      text.includes('build') || 
+      text.includes('create') ||
+      text.includes('develop') ||
+      text.includes('implement') ||
+      text.includes('organize') ||
+      text.includes('plan') ||
+      text.includes('website') ||
+      text.includes('app') ||
+      text.includes('business') ||
+      text.includes('marketing') ||
+      text.includes('campaign') ||
+      text.includes('strategy') ||
+      text.includes('system') ||
+      text.includes('process') ||
+      // Check for complex multi-sentence descriptions
+      (text.split(/[.!?]+/).filter(s => s.trim()).length > 3) ||
+      // Check for multiple "and" connections indicating complexity
+      (text.split(' and ').length > 3)
+    );
+    
+    setSmartProcessing(true);
+    
+    try {
+      if (isProjectIndicator) {
+        // Route to projects API
+        const response = await fetch('/api/projects', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ input: text }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // Add all parsed projects
+          data.projects.forEach((project, index) => {
+            setTimeout(() => {
+              addProject(project);
+            }, index * 100);
+          });
+          
+          // Show success message
+          setTimeout(() => {
+            alert(`🎉 ${data.message || `Created project successfully!`}`);
+          }, data.projects.length * 100 + 200);
+          
+          setSmartInput('');
+        } else {
+          alert(`Error creating project: ${data.error}`);
+        }
+      } else {
+        // Route to tasks API
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ input: text }),
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Add all parsed tasks with a small delay for better UX
+          data.tasks.forEach((taskData, index) => {
+            setTimeout(() => {
+              addTask(taskData.text, taskData.energy, taskData.tags, taskData.context);
+            }, index * 100); // 100ms delay between each task
+          });
+          
+          // Show success message after all tasks are added
+          setTimeout(() => {
+            alert(`🎉 ${data.message || `Created ${data.tasks.length} tasks!`}`);
+          }, data.tasks.length * 100 + 200);
+          
+          setSmartInput("");
+        } else {
+          // Fallback to simple task creation
+          console.error('Task parsing failed:', data.error);
+          const aiAnalysis = analyzeTaskWithAI(text);
+          addTask(text, aiAnalysis.energy, aiAnalysis.tags, aiAnalysis.context);
+          setSmartInput("");
+        }
+      }
+    } catch (error) {
+      console.error('Smart add error:', error);
+      alert('Error processing request. Please try again.');
+    } finally {
+      setSmartProcessing(false);
+    }
+  };
+
   const getProjectStatusColor = (status) => {
     switch (status) {
       case 'completed': return 'bg-green-50 border-green-200 text-green-700';
@@ -740,10 +891,8 @@ const LifeDashboard = () => {
       // Clear the appropriate input based on current mode
       if (showProjectChat) {
         setChatInput("");
-      } else if (showProjectMode) {
-        setProjectInput("");
       } else {
-        setTaskInput("");
+        setSmartInput("");
       }
       recognition.start();
     }
@@ -751,6 +900,7 @@ const LifeDashboard = () => {
 
   const stopVoiceRecording = () => {
     if (recognition && isRecording) {
+      console.log('Manually stopping voice recording');
       recognition.stop();
     }
   };
@@ -1006,157 +1156,59 @@ const LifeDashboard = () => {
         <div className="grid lg:grid-cols-4 gap-6">
           {/* Task Input & Today's Meetings */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Quick Add */}
+            {/* Smart AI Input */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-              <div className="flex items-center justify-center mb-6">
-                <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
-                  <button
-                    onClick={() => { setQuickAddMode(false); setShowProjectMode(false); }}
-                    className={`px-6 py-2 rounded-md transition-colors font-medium ${
-                      !quickAddMode && !showProjectMode 
-                        ? 'bg-white text-blue-700 shadow-sm' 
-                        : 'text-gray-600 hover:text-blue-600'
-                    }`}
-                  >
-                    Tasks
-                  </button>
-                  <button
-                    onClick={() => { setQuickAddMode(true); setShowProjectMode(false); }}
-                    className={`px-6 py-2 rounded-md transition-colors font-medium ${
-                      quickAddMode && !showProjectMode 
-                        ? 'bg-white text-blue-700 shadow-sm' 
-                        : 'text-gray-600 hover:text-blue-600'
-                    }`}
-                  >
-                    Bulk Tasks
-                  </button>
-                  <button
-                    onClick={() => { setShowProjectMode(true); setQuickAddMode(false); }}
-                    className={`px-6 py-2 rounded-md transition-colors font-medium ${
-                      showProjectMode 
-                        ? 'bg-white text-purple-700 shadow-sm' 
-                        : 'text-gray-600 hover:text-purple-600'
-                    }`}
-                  >
-                    Projects
-                  </button>
-                </div>
+              <div className="text-center mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">🧠 Smart AI Assistant</h3>
+                <p className="text-sm text-gray-600">Describe anything - AI will create tasks or projects automatically</p>
               </div>
               
-              {showProjectMode ? (
-                <form onSubmit={handleProjectSubmit} className="space-y-3">
-                  <div className="relative">
-                    <textarea
-                      value={projectInput}
-                      onChange={(e) => setProjectInput(e.target.value)}
-                      placeholder={isRecording ? "🎤 LISTENING... Describe your project idea! Take your time - 8 seconds of silence to finish." : projectProcessing ? "🧠 AI is creating your project..." : "Describe your project idea! AI will break it into a project with tasks...&#10;&#10;Example: 'I want to launch a company blog to improve our content marketing. Need to research platforms, create a content calendar, write some initial posts, and set up analytics.'"}
-                      className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm h-32 resize-none ${
-                        isRecording 
-                          ? 'border-red-300 bg-red-50 focus:ring-red-500' 
-                          : 'border-gray-200 focus:ring-purple-500'
-                      }`}
-                      disabled={isRecording || projectProcessing}
-                    />
-                    {speechSupported && (
-                      <button
-                        type="button"
-                        onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                        className={`absolute right-4 top-3 p-2 rounded-full transition-all ${
-                          isRecording 
-                            ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                        title={isRecording ? "Click to stop recording (or wait 8 seconds)" : "Click to start voice recording"}
-                      >
-                        {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={!projectInput.trim() || projectProcessing}
-                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                  >
-                    {projectProcessing ? "🧠 AI Creating Project..." : "Create Project"}
-                  </button>
-                </form>
-              ) : !quickAddMode ? (
-                <form onSubmit={handleTaskSubmit} className="space-y-3">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={taskInput}
-                      onChange={(e) => setTaskInput(e.target.value)}
-                      placeholder={isRecording ? "🎤 LISTENING... Take your time! 8 seconds of silence to finish." : voiceProcessing ? "🧠 AI is breaking down your brain dump..." : "Brain dump everything on your mind! AI will create multiple tasks..."}
-                      className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm ${
-                        isRecording 
-                          ? 'border-red-300 bg-red-50 focus:ring-red-500' 
-                          : 'border-gray-200 focus:ring-blue-500'
-                      }`}
-                      disabled={isRecording || voiceProcessing}
-                    />
-                    {speechSupported && (
-                      <button
-                        type="button"
-                        onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                        className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-all ${
-                          isRecording 
-                            ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                        title={isRecording ? "Click to stop recording (or wait 8 seconds)" : "Click to start voice recording"}
-                      >
-                        {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
-                      </button>
-                    )}
-                  </div>
-                  
-                  <button
-                    type="submit"
-                    disabled={!taskInput.trim() || voiceProcessing}
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                  >
-                    {voiceProcessing ? "🧠 AI Processing..." : "Add Task(s)"}
-                  </button>
-                </form>
-              ) : (
-                <div className="space-y-3">
+              {/* Universal Smart Input */}
+              <div className="space-y-4">
+                <div className="relative">
                   <textarea
-                    value={bulkTasks}
-                    onChange={(e) => setBulkTasks(e.target.value)}
-                    placeholder={voiceProcessing ? "🧠 AI is breaking down your brain dump..." : "Just dump your thoughts! AI will break it into multiple tasks...&#10;&#10;Example: 'I need to call mom about weekend plans and review the project docs for the deadline Friday and brainstorm some blog post ideas and also order groceries online'"}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm h-32 resize-none"
-                    disabled={voiceProcessing}
+                    value={smartInput}
+                    onChange={(e) => setSmartInput(e.target.value)}
+                    placeholder={isRecording ? "🎤 LISTENING... Describe anything! Click mic to stop or 3 seconds of silence." : smartProcessing ? "🧠 AI is processing..." : "Describe anything! AI will automatically create tasks or projects...\n\nExamples:\n• \"I need to call mom and finish the report\" → 2 tasks\n• \"Launch a company blog with content strategy\" → Full project"}
+                    className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm h-32 resize-none ${
+                      isRecording 
+                        ? 'border-red-300 bg-red-50 focus:ring-red-500' 
+                        : 'border-gray-200 focus:ring-blue-500'
+                    }`}
+                    disabled={isRecording || smartProcessing}
                   />
-                  <button
-                    onClick={handleBulkAdd}
-                    disabled={!bulkTasks.trim() || voiceProcessing}
-                    className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium"
-                  >
-                    {voiceProcessing ? "🧠 AI Processing..." : "Parse Brain Dump"}
-                  </button>
+                  {speechSupported && (
+                    <button
+                      type="button"
+                      onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                      className={`absolute right-3 top-3 p-2 rounded-full transition-all ${
+                        isRecording 
+                          ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                      title={isRecording ? "Click to stop recording (or wait 3 seconds)" : "Click to start voice recording"}
+                    >
+                      {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                    </button>
+                  )}
                 </div>
-              )}
+                <button
+                  onClick={handleSmartAdd}
+                  disabled={!smartInput.trim() || smartProcessing}
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  {smartProcessing ? '🧠 AI Processing...' : '🧠 Smart Add'}
+                </button>
+              </div>
               
               <div className="mt-4 text-xs text-gray-500 space-y-1">
                 <p><strong>🧠 Smart AI Mode!</strong></p>
-                {showProjectMode ? (
-                  <>
-                    <p>• Describe your project idea - AI creates structured project with tasks</p>
-                    <p>• "Launch a blog" → Project with research, content, setup tasks</p>
-                    <p>• Auto-estimates timeline and sets priorities</p>
-                    <p>• Project tasks are automatically added to your task list</p>
-                    <p>• 🎤 Voice records for 8 seconds of silence - take your time!</p>
-                  </>
-                ) : (
-                  <>
-                    <p>• Just speak/type naturally - AI creates multiple tasks</p>
-                    <p>• "I need to call mom and finish the project" → 2 separate tasks</p>
-                    <p>• Auto-tags everything (#personal, #work, #urgent, etc.)</p>
-                    <p>• 🎤 Voice records for 8 seconds of silence - take your time!</p>
-                    <p>• Use bulk mode for really big brain dumps</p>
-                  </>
-                )}
+                <p>• AI automatically detects if you're describing tasks or projects</p>
+                <p>• <strong>Tasks:</strong> "I need to call mom and finish the report" → 2 separate tasks</p>
+                <p>• <strong>Projects:</strong> "Launch a company blog" → Full project with phases</p>
+                <p>• Auto-tags everything (#personal, #work, #urgent, etc.)</p>
+                <p>• 🎤 Voice records for 3 seconds of silence - click mic to stop!</p>
+                <p>• Just speak naturally - AI handles the rest!</p>
               </div>
             </div>
 
@@ -1537,14 +1589,14 @@ const LifeDashboard = () => {
                     </div>
                     
                     {/* Chat Input */}
-                    <div className="flex gap-3">
+                    <div className="flex gap-3" data-project-chat="true">
                       <div className="flex-1 relative">
                         <input
                           type="text"
                           value={chatInput}
                           onChange={(e) => setChatInput(e.target.value)}
                           onKeyPress={(e) => e.key === 'Enter' && !chatProcessing && handleProjectManagerChat(chatInput)}
-                          placeholder={isRecording ? "🎤 LISTENING... Tell me what you want to change about your projects..." : chatProcessing ? "🧠 AI is thinking..." : "Ask me to reorganize projects, add tasks, change priorities..."}
+                                                     placeholder={isRecording ? "🎤 LISTENING... Click mic to stop or 3 seconds of silence." : chatProcessing ? "🧠 AI is thinking..." : "Ask me to reorganize projects, add tasks, change priorities..."}
                           className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm ${
                             isRecording 
                               ? 'border-red-300 bg-red-50 focus:ring-red-500' 
@@ -1556,12 +1608,12 @@ const LifeDashboard = () => {
                           <button
                             type="button"
                             onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                            className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-all ${
-                              isRecording 
-                                ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }`}
-                            title={isRecording ? "Click to stop recording (or wait 8 seconds)" : "Click to start voice recording"}
+                                                         className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-all ${
+                               isRecording 
+                                 ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
+                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                             }`}
+                             title={isRecording ? "Click to stop recording (or wait 3 seconds)" : "Click to start voice recording"}
                           >
                             {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
                           </button>
