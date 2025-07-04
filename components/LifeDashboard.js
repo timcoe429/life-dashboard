@@ -260,7 +260,7 @@ const LifeDashboard = () => {
     }
   }, []);
 
-  const addTask = (taskText, energy = "medium", tags = [], context = "anywhere") => {
+  const addTask = (taskText, energy = "medium", tags = [], context = "anywhere", projectId = null, projectTitle = null) => {
     if (!taskText.trim()) return;
     
     const newTask = {
@@ -272,6 +272,12 @@ const LifeDashboard = () => {
       context: context,
       createdAt: new Date().toISOString()
     };
+    
+    // Add project association if provided
+    if (projectId) {
+      newTask.projectId = projectId;
+      newTask.projectTitle = projectTitle;
+    }
     
     setTasks(prev => [newTask, ...prev]);
   };
@@ -579,12 +585,7 @@ const LifeDashboard = () => {
     if (project.tasks && project.tasks.length > 0) {
       project.tasks.forEach((task, index) => {
         setTimeout(() => {
-          const taskWithProject = {
-            ...task,
-            projectId: newProject.id,
-            projectTitle: newProject.title
-          };
-          addTask(taskWithProject.text, taskWithProject.energy, taskWithProject.tags, taskWithProject.context);
+          addTask(task.text, task.energy, task.tags, task.context, newProject.id, newProject.title);
         }, index * 50);
       });
     }
@@ -1114,12 +1115,25 @@ const LifeDashboard = () => {
     }
   };
 
-  const filteredTasks = selectedEnergyFilter === "all" 
-    ? tasks 
-    : tasks.filter(task => task.energy === selectedEnergyFilter);
-
-  const incompleteTasks = filteredTasks.filter(task => !task.completed);
-  const completedTasks = filteredTasks.filter(task => task.completed);
+  // Filter tasks by energy level and project
+  const getFilteredTasks = (taskList) => {
+    let filtered = taskList;
+    
+    // Filter by energy level
+    if (selectedEnergyFilter !== 'all') {
+      filtered = filtered.filter(task => task.energy === selectedEnergyFilter);
+    }
+    
+    // Filter by selected project
+    if (selectedProject) {
+      filtered = filtered.filter(task => task.projectId === selectedProject.id);
+    }
+    
+    return filtered;
+  };
+  
+  const incompleteTasks = getFilteredTasks(tasks.filter(task => !task.completed));
+  const completedTasks = getFilteredTasks(tasks.filter(task => task.completed));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1186,6 +1200,123 @@ const LifeDashboard = () => {
         </div>
 
         <div className="grid lg:grid-cols-4 gap-6">
+          {/* Left Sidebar - Projects & Input */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Projects Section */}
+            {projects.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Projects</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedProject(null)}
+                      className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                        !selectedProject 
+                          ? 'bg-blue-100 text-blue-700' 
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      All Tasks
+                    </button>
+                    <button
+                      onClick={() => setShowProjectChat(!showProjectChat)}
+                      className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                        showProjectChat 
+                          ? 'bg-purple-100 text-purple-700' 
+                          : 'bg-purple-600 text-white hover:bg-purple-700'
+                      }`}
+                    >
+                      AI Chat
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {projects.map(project => (
+                    <div 
+                      key={project.id}
+                      onClick={() => setSelectedProject(project)}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        selectedProject?.id === project.id
+                          ? 'border-purple-200 bg-purple-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          {editingProject === project.id ? (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                defaultValue={project.title}
+                                onBlur={(e) => updateProject(project.id, { title: e.target.value })}
+                                onKeyPress={(e) => e.key === 'Enter' && e.target.blur()}
+                                className="w-full text-sm font-medium bg-white border border-gray-300 rounded px-2 py-1"
+                                autoFocus
+                              />
+                              <textarea
+                                defaultValue={project.description}
+                                onBlur={(e) => updateProject(project.id, { description: e.target.value })}
+                                className="w-full text-xs bg-white border border-gray-300 rounded px-2 py-1 resize-none"
+                                rows={2}
+                              />
+                              <select
+                                defaultValue={project.status}
+                                onChange={(e) => updateProject(project.id, { status: e.target.value })}
+                                className="text-xs bg-white border border-gray-300 rounded px-2 py-1"
+                              >
+                                <option value="planning">Planning</option>
+                                <option value="in-progress">In Progress</option>
+                                <option value="review">Review</option>
+                                <option value="completed">Completed</option>
+                              </select>
+                            </div>
+                          ) : (
+                            <>
+                              <h4 className="font-medium text-gray-900 text-sm mb-1">{project.title}</h4>
+                              <p className="text-xs text-gray-600 mb-2">{project.description}</p>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${getProjectStatusColor(project.status)}`}>
+                                  {project.status}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {tasks.filter(task => task.projectId === project.id).length} tasks
+                                </span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingProject(editingProject === project.id ? null : project.id);
+                            }}
+                            className="p-1 text-gray-400 hover:text-blue-600 rounded"
+                            title="Edit project"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Delete project "${project.title}" and all its tasks?`)) {
+                                deleteProject(project.id);
+                              }
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-600 rounded"
+                            title="Delete project"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Task Input & Today's Meetings */}
           <div className="lg:col-span-1 space-y-6">
             {/* Smart AI Input */}
@@ -1305,11 +1436,18 @@ const LifeDashboard = () => {
           </div>
 
           {/* Task Management */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-2">
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-              {/* Energy Filter */}
+              {/* Task Header */}
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">Your Tasks</h3>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    {selectedProject ? `${selectedProject.title} Tasks` : 'Your Tasks'}
+                  </h3>
+                  {selectedProject && (
+                    <p className="text-sm text-gray-600 mt-1">{selectedProject.description}</p>
+                  )}
+                </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-500">Energy:</span>
@@ -1477,187 +1615,88 @@ const LifeDashboard = () => {
           </div>
         </div>
 
-        {/* Projects Section */}
-        {projects.length > 0 && (
+        {/* AI Project Manager Chat */}
+        {showProjectChat && (
           <div className="mt-6">
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">Your Projects</h3>
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setShowProjectChat(!showProjectChat)}
-                    className={`px-4 py-2 rounded-lg transition-colors font-medium ${
-                      showProjectChat 
-                        ? 'bg-purple-100 text-purple-700' 
-                        : 'bg-purple-600 text-white hover:bg-purple-700'
-                    }`}
-                  >
-                    <Brain size={16} className="inline mr-2" />
-                    AI Project Manager
-                  </button>
-                  <div className="text-sm text-gray-500">
-                    {projects.length} project{projects.length !== 1 ? 's' : ''}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {projects.map(project => (
-                  <div key={project.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-3">
-                      <h4 className="text-lg font-medium text-gray-900 flex-1">{project.title}</h4>
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          onClick={() => setEditingProject(editingProject === project.id ? null : project.id)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 rounded"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          onClick={() => deleteProject(project.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 rounded"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
+              <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Brain size={20} className="text-purple-600" />
+                  AI Project Manager Chat
+                </h4>
+                
+                {/* Chat History */}
+                <div className="bg-white rounded-lg p-4 h-64 overflow-y-auto mb-4 border">
+                  {chatHistory.length === 0 ? (
+                    <div className="text-center text-gray-500 py-8">
+                      <Brain size={32} className="mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">Start a conversation with your AI Project Manager!</p>
+                      <p className="text-xs mt-1">Ask me to reorganize projects, add tasks, change priorities, or analyze dependencies.</p>
                     </div>
-                    
-                    <p className="text-sm text-gray-600 mb-3">{project.description}</p>
-                    
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getProjectStatusColor(project.status)}`}>
-                        {project.status}
-                      </span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getProjectPriorityColor(project.priority)}`}>
-                        {project.priority}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {project.estimatedDays} days
-                      </span>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {project.tags.map(tag => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
-                        >
-                          <Hash size={10} />
-                          {tag}
-                        </span>
+                  ) : (
+                    <div className="space-y-3">
+                      {chatHistory.map((message, index) => (
+                        <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                            message.type === 'user' 
+                              ? 'bg-blue-600 text-white' 
+                              : 'bg-gray-100 text-gray-900'
+                          }`}>
+                            <p className="text-sm">{message.content}</p>
+                            <p className="text-xs opacity-70 mt-1">
+                              {message.timestamp.toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
                       ))}
                     </div>
-                    
-                    {project.phases && project.phases.length > 0 && (
-                      <div className="mb-3">
-                        <h5 className="text-xs font-medium text-gray-700 mb-1">Project Phases:</h5>
-                        <div className="space-y-1">
-                          {project.phases.map((phase, index) => (
-                            <div key={index} className="text-xs text-gray-600 flex items-center gap-1">
-                              <div className="w-4 h-1 bg-gradient-to-r from-purple-200 to-purple-400 rounded"></div>
-                              {phase}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="text-xs text-gray-500">
-                      <p>{project.tasks?.length || 0} task{(project.tasks?.length || 0) !== 1 ? 's' : ''}</p>
-                      <p>Created {new Date(project.createdAt).toLocaleDateString()}</p>
-                      {project.tasks && project.tasks.length > 0 && (
-                        <p className="mt-1">
-                          Est. {project.tasks.reduce((total, task) => total + (task.estimatedHours || 2), 0)} hours total
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              {/* AI Project Manager Chat */}
-              {showProjectChat && (
-                <div className="mt-6 border-t border-gray-100 pt-6">
-                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Brain size={20} className="text-purple-600" />
-                      AI Project Manager Chat
-                    </h4>
-                    
-                    {/* Chat History */}
-                    <div className="bg-white rounded-lg p-4 h-64 overflow-y-auto mb-4 border">
-                      {chatHistory.length === 0 ? (
-                        <div className="text-center text-gray-500 py-8">
-                          <Brain size={32} className="mx-auto mb-2 text-gray-400" />
-                          <p className="text-sm">Start a conversation with your AI Project Manager!</p>
-                          <p className="text-xs mt-1">Ask me to reorganize projects, add tasks, change priorities, or analyze dependencies.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {chatHistory.map((message, index) => (
-                            <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                                message.type === 'user' 
-                                  ? 'bg-blue-600 text-white' 
-                                  : 'bg-gray-100 text-gray-900'
-                              }`}>
-                                <p className="text-sm">{message.content}</p>
-                                <p className="text-xs opacity-70 mt-1">
-                                  {message.timestamp.toLocaleTimeString()}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Chat Input */}
-                    <div className="flex gap-3" data-project-chat="true">
-                      <div className="flex-1 relative">
-                        <input
-                          type="text"
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && !chatProcessing && handleProjectManagerChat(chatInput)}
-                                                     placeholder={isRecording ? "🎤 LISTENING... Click mic to stop or 3 seconds of silence." : chatProcessing ? "🧠 AI is thinking..." : "Ask me to reorganize projects, add tasks, change priorities..."}
-                          className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm ${
-                            isRecording 
-                              ? 'border-red-300 bg-red-50 focus:ring-red-500' 
-                              : 'border-gray-200 focus:ring-purple-500'
-                          }`}
-                          disabled={isRecording || chatProcessing}
-                        />
-                        {speechSupported && (
-                          <button
-                            type="button"
-                            onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                                                         className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-all ${
-                               isRecording 
-                                 ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
-                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                             }`}
-                             title={isRecording ? "Click to stop recording (or wait 3 seconds)" : "Click to start voice recording"}
-                          >
-                            {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => handleProjectManagerChat(chatInput)}
-                        disabled={!chatInput.trim() || chatProcessing}
-                        className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                      >
-                        {chatProcessing ? "🧠 Thinking..." : "Send"}
-                      </button>
-                    </div>
-                    
-                    <div className="mt-3 text-xs text-gray-600">
-                      <p><strong>Examples:</strong> "Reorganize my blog project tasks by priority" • "Add SEO optimization tasks to the blog project" • "Change the company blog project to high priority" • "What's the best order to complete my tasks?"</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
-              )}
+                
+                {/* Chat Input */}
+                <div className="flex gap-3" data-project-chat="true">
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && !chatProcessing && handleProjectManagerChat(chatInput)}
+                      placeholder={isRecording ? "🎤 LISTENING... Click mic to stop or 3 seconds of silence." : chatProcessing ? "🧠 AI is thinking..." : "Ask me to reorganize projects, add tasks, change priorities..."}
+                      className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm ${
+                        isRecording 
+                          ? 'border-red-300 bg-red-50 focus:ring-red-500' 
+                          : 'border-gray-200 focus:ring-purple-500'
+                      }`}
+                      disabled={isRecording || chatProcessing}
+                    />
+                    {speechSupported && (
+                      <button
+                        type="button"
+                        onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                        className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-all ${
+                          isRecording 
+                            ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                        title={isRecording ? "Click to stop recording (or wait 3 seconds)" : "Click to start voice recording"}
+                      >
+                        {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleProjectManagerChat(chatInput)}
+                    disabled={!chatInput.trim() || chatProcessing}
+                    className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  >
+                    {chatProcessing ? "🧠 Thinking..." : "Send"}
+                  </button>
+                </div>
+                
+                <div className="mt-3 text-xs text-gray-600">
+                  <p><strong>Examples:</strong> "Reorganize my blog project tasks by priority" • "Add SEO optimization tasks to the blog project" • "Change the company blog project to high priority" • "What's the best order to complete my tasks?"</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
