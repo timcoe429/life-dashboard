@@ -41,9 +41,11 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: false // Disable web security for local files
     },
-    show: false // Don't show until ready
+    show: false, // Don't show until ready
+    backgroundColor: 'rgba(0, 0, 0, 0)' // Transparent background
   });
 
   // Set opacity
@@ -84,7 +86,12 @@ function saveWindowState() {
 
 function createTray() {
   // Create tray icon (simple for now)
-  tray = new Tray(path.join(__dirname, 'assets', 'icon.png'));
+  try {
+    tray = new Tray(path.join(__dirname, 'assets', 'icon.png'));
+  } catch (error) {
+    console.log('Tray icon not found, skipping tray creation');
+    return;
+  }
   
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -148,8 +155,10 @@ function createTray() {
     }
   ]);
 
-  tray.setToolTip('Life Dashboard');
-  tray.setContextMenu(contextMenu);
+  if (tray) {
+    tray.setToolTip('Life Dashboard');
+    tray.setContextMenu(contextMenu);
+  }
 }
 
 function setOpacity(opacity) {
@@ -158,6 +167,9 @@ function setOpacity(opacity) {
     mainWindow.setOpacity(opacity);
   }
 }
+
+// Disable GPU acceleration to prevent crashes with transparency
+app.disableHardwareAcceleration();
 
 // App event handlers
 app.whenReady().then(() => {
