@@ -651,11 +651,24 @@ const LifeDashboard = () => {
   const handleSmartAdd = async () => {
     if (!smartInput.trim()) return;
     
-    const text = smartInput.trim();
+    const text = smartInput.trim().toLowerCase();
     
-    // AI detection logic - decide if this is a project or tasks
-    const isProjectIndicator = (
-      text.length > 100 || // Long descriptions are usually projects
+    // Check for manual override first
+    let forceProject = false;
+    let forceTask = false;
+    let cleanText = smartInput.trim();
+    
+    if (cleanText.toLowerCase().startsWith('project:')) {
+      forceProject = true;
+      cleanText = cleanText.substring(8).trim();
+    } else if (cleanText.toLowerCase().startsWith('task:')) {
+      forceTask = true;
+      cleanText = cleanText.substring(5).trim();
+    }
+    
+    // Enhanced AI detection logic - be more aggressive about detecting projects
+    const isProjectIndicator = forceProject || (!forceTask && (
+      // Explicit project keywords
       text.includes('project') || 
       text.includes('launch') || 
       text.includes('build') || 
@@ -672,11 +685,30 @@ const LifeDashboard = () => {
       text.includes('strategy') ||
       text.includes('system') ||
       text.includes('process') ||
-      // Check for complex multi-sentence descriptions
-      (text.split(/[.!?]+/).filter(s => s.trim()).length > 3) ||
-      // Check for multiple "and" connections indicating complexity
-      (text.split(' and ').length > 3)
-    );
+      
+      // Process/workflow indicators
+      text.includes('steps') ||
+      text.includes('phases') ||
+      text.includes('workflow') ||
+      text.includes('roadmap') ||
+      text.includes('milestone') ||
+      
+      // Complex descriptions
+      text.length > 80 || // Shorter threshold
+      (text.split(/[.!?]+/).filter(s => s.trim()).length > 2) || // Lower threshold
+      (text.split(' and ').length > 2) || // More sensitive
+      
+      // Multiple action words indicate complex project
+      (text.match(/(create|build|develop|design|implement|launch|organize|plan|research|test|deploy|setup|configure)/g) || []).length > 2
+    ));
+    
+    console.log('Smart detection:', { 
+      text: text.substring(0, 100), 
+      isProject: isProjectIndicator,
+      forceProject,
+      forceTask,
+      textLength: text.length 
+    });
     
     setSmartProcessing(true);
     
@@ -688,7 +720,7 @@ const LifeDashboard = () => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ input: text }),
+          body: JSON.stringify({ input: cleanText }),
         });
 
         const data = await response.json();
@@ -717,7 +749,7 @@ const LifeDashboard = () => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ input: text }),
+          body: JSON.stringify({ input: cleanText }),
         });
         
         const data = await response.json();
@@ -739,8 +771,8 @@ const LifeDashboard = () => {
         } else {
           // Fallback to simple task creation
           console.error('Task parsing failed:', data.error);
-          const aiAnalysis = analyzeTaskWithAI(text);
-          addTask(text, aiAnalysis.energy, aiAnalysis.tags, aiAnalysis.context);
+          const aiAnalysis = analyzeTaskWithAI(cleanText);
+          addTask(cleanText, aiAnalysis.energy, aiAnalysis.tags, aiAnalysis.context);
           setSmartInput("");
         }
       }
@@ -1169,7 +1201,7 @@ const LifeDashboard = () => {
                   <textarea
                     value={smartInput}
                     onChange={(e) => setSmartInput(e.target.value)}
-                    placeholder={isRecording ? "🎤 LISTENING... Describe anything! Click mic to stop or 3 seconds of silence." : smartProcessing ? "🧠 AI is processing..." : "Describe anything! AI will automatically create tasks or projects...\n\nExamples:\n• \"I need to call mom and finish the report\" → 2 tasks\n• \"Launch a company blog with content strategy\" → Full project"}
+                    placeholder={isRecording ? "🎤 LISTENING... Describe anything! Click mic to stop or 3 seconds of silence." : smartProcessing ? "🧠 AI is processing..." : "Describe anything! AI will automatically create tasks or projects...\n\nExamples:\n• \"I need to call mom and finish the report\" → 2 tasks\n• \"Launch a company blog with content strategy\" → Full project\n• \"PROJECT: Build a mobile app\" → Forces project mode\n• \"TASK: Just simple individual tasks\" → Forces task mode"}
                     className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm h-32 resize-none ${
                       isRecording 
                         ? 'border-red-300 bg-red-50 focus:ring-red-500' 
@@ -1206,9 +1238,9 @@ const LifeDashboard = () => {
                 <p>• AI automatically detects if you're describing tasks or projects</p>
                 <p>• <strong>Tasks:</strong> "I need to call mom and finish the report" → 2 separate tasks</p>
                 <p>• <strong>Projects:</strong> "Launch a company blog" → Full project with phases</p>
+                <p>• <strong>Manual Override:</strong> Start with "PROJECT:" or "TASK:" to force mode</p>
                 <p>• Auto-tags everything (#personal, #work, #urgent, etc.)</p>
                 <p>• 🎤 Voice records for 3 seconds of silence - click mic to stop!</p>
-                <p>• Just speak naturally - AI handles the rest!</p>
               </div>
             </div>
 
