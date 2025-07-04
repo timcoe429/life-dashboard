@@ -1202,7 +1202,7 @@ const LifeDashboard = () => {
                     value={smartInput}
                     onChange={(e) => setSmartInput(e.target.value)}
                     placeholder={isRecording ? "🎤 LISTENING... Describe anything! Click mic to stop or 3 seconds of silence." : smartProcessing ? "🧠 AI is processing..." : "Describe anything! AI will automatically create tasks or projects...\n\nExamples:\n• \"I need to call mom and finish the report\" → 2 tasks\n• \"Launch a company blog with content strategy\" → Full project\n• \"PROJECT: Build a mobile app\" → Forces project mode\n• \"TASK: Just simple individual tasks\" → Forces task mode"}
-                    className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 text-sm h-32 resize-none ${
+                    className={`w-full px-4 py-3 pr-12 pb-12 border rounded-lg focus:outline-none focus:ring-2 text-sm h-32 resize-none ${
                       isRecording 
                         ? 'border-red-300 bg-red-50 focus:ring-red-500' 
                         : 'border-gray-200 focus:ring-blue-500'
@@ -1213,7 +1213,7 @@ const LifeDashboard = () => {
                     <button
                       type="button"
                       onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                      className={`absolute right-3 top-3 p-2 rounded-full transition-all ${
+                      className={`absolute right-3 bottom-3 p-2 rounded-full transition-all ${
                         isRecording 
                           ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1233,15 +1233,7 @@ const LifeDashboard = () => {
                 </button>
               </div>
               
-              <div className="mt-4 text-xs text-gray-500 space-y-1">
-                <p><strong>🧠 Smart AI Mode!</strong></p>
-                <p>• AI automatically detects if you're describing tasks or projects</p>
-                <p>• <strong>Tasks:</strong> "I need to call mom and finish the report" → 2 separate tasks</p>
-                <p>• <strong>Projects:</strong> "Launch a company blog" → Full project with phases</p>
-                <p>• <strong>Manual Override:</strong> Start with "PROJECT:" or "TASK:" to force mode</p>
-                <p>• Auto-tags everything (#personal, #work, #urgent, etc.)</p>
-                <p>• 🎤 Voice records for 3 seconds of silence - click mic to stop!</p>
-              </div>
+
             </div>
 
             {/* Today's Meetings */}
