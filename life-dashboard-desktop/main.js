@@ -19,17 +19,12 @@ const defaultSettings = {
 };
 
 function createWindow() {
-  // Get all displays
-  const displays = screen.getAllDisplays();
-  const selectedMonitor = store.get('selectedMonitor', 0);
-  const targetDisplay = displays[selectedMonitor] || displays[0];
-  
   // Get saved settings
   const settings = { ...defaultSettings, ...store.get('settings', {}) };
   
-  // Calculate position on selected monitor
-  const x = targetDisplay.bounds.x + settings.position.x;
-  const y = targetDisplay.bounds.y + settings.position.y;
+  // Use default position (screen module will be available after app ready)
+  const x = settings.position.x;
+  const y = settings.position.y;
 
   // Create the browser window
   mainWindow = new BrowserWindow({
@@ -112,18 +107,16 @@ function createTray() {
     { type: 'separator' },
     {
       label: 'Choose Monitor',
-      submenu: screen.getAllDisplays().map((display, index) => ({
-        label: `Monitor ${index + 1} (${display.size.width}x${display.size.height})`,
-        type: 'radio',
-        checked: store.get('selectedMonitor', 0) === index,
-        click: () => {
-          store.set('selectedMonitor', index);
-          if (mainWindow) {
-            mainWindow.close();
-            createWindow();
+      submenu: [
+        {
+          label: 'Primary Monitor',
+          type: 'radio',
+          checked: true,
+          click: () => {
+            // Monitor selection functionality can be added later
           }
         }
-      }))
+      ]
     },
     { type: 'separator' },
     {
@@ -184,24 +177,7 @@ app.on('activate', () => {
   }
 });
 
-// Handle display changes
-screen.on('display-added', () => {
-  if (tray) {
-    createTray();
-  }
-});
-
-screen.on('display-removed', () => {
-  const displays = screen.getAllDisplays();
-  const selectedMonitor = store.get('selectedMonitor', 0);
-  if (selectedMonitor >= displays.length) {
-    store.set('selectedMonitor', 0);
-    if (mainWindow) {
-      mainWindow.close();
-      createWindow();
-    }
-  }
-});
+// Display change handling can be added later when needed
 
 // Prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock();
