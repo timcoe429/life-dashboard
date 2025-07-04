@@ -38,6 +38,9 @@ const LifeDashboard = () => {
   // Unified smart input
   const [smartInput, setSmartInput] = useState('');
   const [smartProcessing, setSmartProcessing] = useState(false);
+  
+  // UI state
+  const [aiAssistantMinimized, setAiAssistantMinimized] = useState(false);
 
   // Update clock
   useEffect(() => {
@@ -1199,9 +1202,69 @@ const LifeDashboard = () => {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-4 gap-6">
-          {/* Left Sidebar - Projects & Input */}
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left Sidebar - AI Assistant, Projects & Meetings */}
           <div className="lg:col-span-1 space-y-6">
+            {/* Smart AI Input */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="text-center flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">🧠 Smart AI Assistant</h3>
+                  {!aiAssistantMinimized && (
+                    <p className="text-sm text-gray-600">Describe anything - AI will create tasks or projects automatically</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setAiAssistantMinimized(!aiAssistantMinimized)}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded"
+                  title={aiAssistantMinimized ? "Expand AI Assistant" : "Minimize AI Assistant"}
+                >
+                  {aiAssistantMinimized ? <Plus size={16} /> : '−'}
+                </button>
+              </div>
+              
+              {/* Universal Smart Input */}
+              {!aiAssistantMinimized && (
+                <div className="space-y-4">
+                  <div className="relative">
+                    <textarea
+                      value={smartInput}
+                      onChange={(e) => setSmartInput(e.target.value)}
+                      placeholder={isRecording ? "🎤 LISTENING... Describe anything! Click mic to stop or 3 seconds of silence." : smartProcessing ? "🧠 AI is processing..." : "Describe anything! AI will automatically create tasks or projects...\n\nExamples:\n• \"I need to call mom and finish the report\" → 2 tasks\n• \"Launch a company blog with content strategy\" → Full project\n• \"PROJECT: Build a mobile app\" → Forces project mode\n• \"TASK: Just simple individual tasks\" → Forces task mode"}
+                      className={`w-full px-4 py-3 pr-12 pb-12 border rounded-lg focus:outline-none focus:ring-2 text-sm h-32 resize-none ${
+                        isRecording 
+                          ? 'border-red-300 bg-red-50 focus:ring-red-500' 
+                          : 'border-gray-200 focus:ring-blue-500'
+                      }`}
+                      disabled={isRecording || smartProcessing}
+                    />
+                    {speechSupported && (
+                      <button
+                        type="button"
+                        onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                        className={`absolute right-3 bottom-3 p-2 rounded-full transition-all ${
+                          isRecording 
+                            ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                        title={isRecording ? "Click to stop recording (or wait 3 seconds)" : "Click to start voice recording"}
+                      >
+                        {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleSmartAdd}
+                    disabled={!smartInput.trim() || smartProcessing}
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    {smartProcessing ? '🧠 AI Processing...' : '🧠 Smart Add'}
+                  </button>
+                </div>
+              )}
+
+            </div>
+
             {/* Projects Section */}
             {projects.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -1315,57 +1378,6 @@ const LifeDashboard = () => {
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Task Input & Today's Meetings */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Smart AI Input */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-              <div className="text-center mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">🧠 Smart AI Assistant</h3>
-                <p className="text-sm text-gray-600">Describe anything - AI will create tasks or projects automatically</p>
-              </div>
-              
-              {/* Universal Smart Input */}
-              <div className="space-y-4">
-                <div className="relative">
-                  <textarea
-                    value={smartInput}
-                    onChange={(e) => setSmartInput(e.target.value)}
-                    placeholder={isRecording ? "🎤 LISTENING... Describe anything! Click mic to stop or 3 seconds of silence." : smartProcessing ? "🧠 AI is processing..." : "Describe anything! AI will automatically create tasks or projects...\n\nExamples:\n• \"I need to call mom and finish the report\" → 2 tasks\n• \"Launch a company blog with content strategy\" → Full project\n• \"PROJECT: Build a mobile app\" → Forces project mode\n• \"TASK: Just simple individual tasks\" → Forces task mode"}
-                    className={`w-full px-4 py-3 pr-12 pb-12 border rounded-lg focus:outline-none focus:ring-2 text-sm h-32 resize-none ${
-                      isRecording 
-                        ? 'border-red-300 bg-red-50 focus:ring-red-500' 
-                        : 'border-gray-200 focus:ring-blue-500'
-                    }`}
-                    disabled={isRecording || smartProcessing}
-                  />
-                  {speechSupported && (
-                    <button
-                      type="button"
-                      onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                      className={`absolute right-3 bottom-3 p-2 rounded-full transition-all ${
-                        isRecording 
-                          ? 'bg-red-500 text-white animate-pulse shadow-lg ring-2 ring-red-300' 
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                      title={isRecording ? "Click to stop recording (or wait 3 seconds)" : "Click to start voice recording"}
-                    >
-                      {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
-                    </button>
-                  )}
-                </div>
-                <button
-                  onClick={handleSmartAdd}
-                  disabled={!smartInput.trim() || smartProcessing}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                >
-                  {smartProcessing ? '🧠 AI Processing...' : '🧠 Smart Add'}
-                </button>
-              </div>
-              
-
-            </div>
 
             {/* Today's Meetings */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
