@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life Dashboard - Desktop Widget</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <h1 id="greeting">Good morning, Tim</h1>
+                <p id="current-date" class="date-display"></p>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-circle"></i>
+                </div>
+                <div class="stat-content">
+                    <p class="stat-number" id="tasks-todo">0</p>
+                    <p class="stat-label">Tasks to do</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon stat-icon-green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-content">
+                    <p class="stat-number" id="tasks-completed">0</p>
+                    <p class="stat-label">Completed today</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon stat-icon-purple">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <div class="stat-content">
+                    <p class="stat-number" id="projects-count">0</p>
+                    <p class="stat-label">Active projects</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon stat-icon-orange">
+                    <i class="fas fa-calendar"></i>
+                </div>
+                <div class="stat-content">
+                    <p class="stat-number" id="meetings-today">0</p>
+                    <p class="stat-label">Meetings today</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Sidebar -->
+            <div class="sidebar">
+                <!-- AI Assistant -->
+                <div class="ai-assistant-card">
+                    <div class="card-header">
+                        <div class="header-content">
+                            <h3>🧠 Smart AI Assistant</h3>
+                            <p class="card-subtitle" id="ai-subtitle">Describe anything - AI will create tasks or projects automatically</p>
+                        </div>
+                        <button id="ai-minimize-btn" class="minimize-btn" title="Minimize AI Assistant">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="ai-input-container" id="ai-input-container">
+                        <div class="smart-input-wrapper">
+                            <textarea
+                                id="smart-input"
+                                placeholder="Describe anything! AI will automatically create tasks or projects...
+
+Examples:
+• &quot;I need to call mom and finish the report&quot; → 2 tasks
+• &quot;Launch a company blog with content strategy&quot; → Full project
+• &quot;PROJECT: Build a mobile app&quot; → Forces project mode
+• &quot;TASK: Just simple individual tasks&quot; → Forces task mode"
+                                class="smart-input"
+                                rows="5"
+                            ></textarea>
+                            <button id="voice-btn" class="voice-btn" title="Click to start voice recording">
+                                <i class="fas fa-microphone"></i>
+                            </button>
+                        </div>
+                        <button id="smart-add-btn" class="smart-add-btn">
+                            🧠 Smart Add
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Projects Section -->
+                <div class="projects-card" id="projects-card">
+                    <div class="card-header">
+                        <h3>Projects</h3>
+                        <div class="project-controls">
+                            <button id="all-tasks-btn" class="control-btn active">All Tasks</button>
+                            <button id="ai-chat-btn" class="control-btn">AI Chat</button>
+                        </div>
+                    </div>
+                    <div class="projects-list" id="projects-list">
+                        <!-- Projects will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Calendar/Meetings Section -->
+                <div class="meetings-card">
+                    <div class="card-header">
+                        <h3>Today's Meetings</h3>
+                        <button id="calendar-auth-btn" class="auth-btn">
+                            <i class="fas fa-calendar"></i> Connect Calendar
+                        </button>
+                    </div>
+                    <div class="meetings-list" id="meetings-list">
+                        <p class="no-meetings">No meetings scheduled for today</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Content Area -->
+            <div class="content-area">
+                <!-- Task Filters -->
+                <div class="task-filters">
+                    <div class="filter-group">
+                        <label>Energy Level:</label>
+                        <select id="energy-filter">
+                            <option value="all">All Energy</option>
+                            <option value="high">High Energy</option>
+                            <option value="creative">Creative</option>
+                            <option value="low">Low Energy</option>
+                        </select>
+                    </div>
+                    <div class="filter-info" id="filter-info">
+                        Showing all tasks
+                    </div>
+                </div>
+
+                <!-- Tasks Section -->
+                <div class="tasks-container">
+                    <!-- Incomplete Tasks -->
+                    <div class="task-section">
+                        <h3 class="section-title">
+                            <i class="fas fa-circle"></i>
+                            Tasks to Complete
+                        </h3>
+                        <div class="tasks-list" id="incomplete-tasks">
+                            <!-- Tasks will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Completed Tasks -->
+                    <div class="task-section">
+                        <h3 class="section-title">
+                            <i class="fas fa-check-circle"></i>
+                            Completed Today
+                        </h3>
+                        <div class="tasks-list" id="completed-tasks">
+                            <!-- Completed tasks will be populated here -->
+                        </div>
+                        <button id="clear-completed-btn" class="clear-btn">
+                            Clear Completed Tasks
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>AI is processing...</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
