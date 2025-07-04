@@ -12,20 +12,13 @@ function createWindow() {
     height: 800,
     x: 50,
     y: 50,
-<<<<<<< HEAD
     frame: false, // Remove window frame for clean look
     skipTaskbar: true, // Don't show in taskbar
     alwaysOnTop: false, // Stay behind other windows
-=======
-    frame: false,
-    skipTaskbar: true,
-    alwaysOnTop: false,
->>>>>>> 33ba8d89e4971ba754bba81d352a85f1afdb90bc
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
     },
-<<<<<<< HEAD
     backgroundColor: '#f0f0f0' // Light gray background
   });
 
@@ -37,16 +30,6 @@ function createWindow() {
   // Keep it behind other windows
   mainWindow.on('focus', () => {
     mainWindow.blur(); // Lose focus immediately
-=======
-    backgroundColor: '#f0f0f0'
-  });
-
-  mainWindow.loadFile('index.html');
-  mainWindow.webContents.openDevTools();
-
-  mainWindow.on('focus', () => {
-    mainWindow.blur(); // Stay behind other windows
->>>>>>> 33ba8d89e4971ba754bba81d352a85f1afdb90bc
   });
 
   mainWindow.on('closed', () => {
@@ -69,12 +52,9 @@ app.on('activate', () => {
     createWindow();
   }
 });
-<<<<<<< HEAD
 
 // Prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
-} 
-=======
->>>>>>> 33ba8d89e4971ba754bba81d352a85f1afdb90bc
+}
